@@ -163,6 +163,41 @@ class CreateAdminView(APIView):
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e),"line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
    
+    def put(self, request):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            data = request.data
+            if request.user.role == "admin" and request.user.id != data.get("user_id", None):
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            user_id = data.get("user_id", None)
+            if not user_id:
+                return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            email = data.get("email", None)
+            employee_id = data.get("employee_id", None)
+            username = data.get("username", None)
+            if username and user.objects.filter(username=username).exists():
+                return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if employee_id and user.objects.filter(employee_id=employee_id).exists():
+                return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if email and user.objects.filter(email=email).exists():
+                return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            serializer = EmployeeSerializer(user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Admin updated successfully","user": serializer.data, "status":status.HTTP_200_OK}, status.HTTP_200_OK)
+            else:
+                return Response({"message": "Invalid data", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno 
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CreateEmployeeView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -192,7 +227,7 @@ class CreateEmployeeView(APIView):
             mobile = data.get("mobile", "")
             password = data.get("password", "")
             
-            if not username or not employee_id or not email or not first_name or not last_name or not mobile or not password:
+            if not username or not employee_id or not email or not first_name or not password:
                 return Response({"message": "All fields are required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
             if User.objects.filter(username=data["username"]).exists():
