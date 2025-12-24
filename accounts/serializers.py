@@ -18,6 +18,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "role",
             "mobile",
             "employee_id",
+            "created_by",
         ]
 
     def get_full_name(self, obj):
