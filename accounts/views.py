@@ -107,6 +107,19 @@ class AuthDataView(APIView):
 
 
 class CreateAdminView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != "super_admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            queryset = User.objects.filter(role="admin")
+            serializer = EmployeeSerializer(queryset, many=True)
+            return Response({"admins": serializer.data,"message": "Admins fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def post(self, request):
         try:
             if request.user.role != "super_admin":
@@ -152,6 +165,18 @@ class CreateAdminView(APIView):
    
 
 class CreateEmployeeView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            queryset = User.objects.filter(role="employee",created_by=request.user)
+            serializer = EmployeeSerializer(queryset, many=True)
+            return Response({"employees": serializer.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         try:
