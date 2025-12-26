@@ -42,29 +42,15 @@ class LoginView(APIView):
                 return Response({"message": "Invalid credentials","status":status.HTTP_401_UNAUTHORIZED},status=status.HTTP_401_UNAUTHORIZED)
 
             token = RefreshToken.for_user(user)
+            serializer = AuthDataSerializer(user)
+            
+            response_data = serializer.data
+            response_data["access"] = str(token.access_token)
+            response_data["refresh"] = str(token)
+            response_data["message"] = "Logged in successfully"
+            response_data["status"] = status.HTTP_200_OK
 
-            return Response({
-                "access": str(token.access_token),
-                "refresh": str(token),
-
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "is_active": user.is_active,
-
-                "employee_id": getattr(user, "employee_id", None),
-                "mobile": getattr(user, "mobile", None),
-
-                "created_by": user.created_by.id if user.created_by else None,
-                "created_datetime": user.created_datetime.isoformat() if user.created_datetime else None,
-                "updated_datetime": user.updated_datetime.isoformat() if user.updated_datetime else None,
-                "status":status.HTTP_200_OK,
-                "message": "Logged in successfully"
-
-            }, status=status.HTTP_200_OK)
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
