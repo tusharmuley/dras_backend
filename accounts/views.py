@@ -12,7 +12,7 @@ import sys
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
-from accounts.serializers import EmployeeSerializer
+from accounts.serializers import EmployeeSerializer, AuthDataSerializer
 from django.contrib.auth.hashers import make_password, check_password
 
 class LoginView(APIView):
@@ -78,27 +78,13 @@ class AuthDataView(APIView):
     def get(self, request):
         try:
             user = request.user  # ✅ authenticated user
+            serializer = AuthDataSerializer(user)
+            
+            response_data = serializer.data
+            response_data["message"] = "Auth data fetched successfully"
+            response_data["status"] = status.HTTP_200_OK
 
-            return Response({
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "is_active": user.is_active,
-
-                "employee_id": getattr(user, "employee_id", None),
-                "mobile": getattr(user, "mobile", None),
-
-                "created_by": user.created_by.id if user.created_by else None,
-                "created_datetime": user.created_datetime.isoformat() if user.created_datetime else None,
-                "updated_datetime": user.updated_datetime.isoformat() if user.updated_datetime else None,
-
-                "message": "Auth data fetched successfully",
-                "status":status.HTTP_200_OK
-
-            }, status=status.HTTP_200_OK)
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
