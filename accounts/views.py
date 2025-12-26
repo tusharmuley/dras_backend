@@ -166,16 +166,21 @@ class CreateAdminView(APIView):
         try:
             if request.user.role != "super_admin" and request.user.role != "admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
             data = request.data
-            if request.user.role == "admin" and request.user.id != data.get("user_id", None):
-                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
             user_id = data.get("user_id", None)
+            
             if not user_id:
                 return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
                 return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            # Validation: Admin can only update their own profile
+            if request.user.role == "admin" and user_id != request.user.id:
+                return Response({"message": "Permission denied. Admin can only update their own profile.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
             
             email = data.get("email", None)
             employee_id = data.get("employee_id", None)
@@ -197,7 +202,7 @@ class CreateAdminView(APIView):
                 serializer.save()
                 return Response({"message": "Admin updated successfully","user": serializer.data, "status":status.HTTP_200_OK}, status.HTTP_200_OK)
             else:
-                return Response({"message": "Invalid data", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid data","serializer_errors": serializer.errors, "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno 
@@ -299,14 +304,23 @@ class CreateEmployeeView(APIView):
             last_name = data.get("last_name", None)
             mobile = data.get("mobile", None)
             password = data.get("password", None)
+            
             if not user_id:
                 return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            # Validation: Employee can only update their own profile
             if request.user.role == "employee" and user_id != request.user.id:
-                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+                return Response({"message": "Permission denied. Employees can only update their own profile.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
                 return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            # Validation: Admin can update their own profile or employees they created
+            if request.user.role == "admin":
+                if user_id != request.user.id and user.created_by != request.user:
+                    return Response({"message": "Permission denied. Admin can only update their own profile or employees they created.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
 
             if username and User.objects.filter(username=username).exclude(id=user.id).exists():
                 return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
@@ -322,7 +336,7 @@ class CreateEmployeeView(APIView):
                 serializer.save()
                 return Response({"message": "Employee updated successfully","user": serializer.data, "status":status.HTTP_200_OK}, status.HTTP_200_OK)
             else:
-                return Response({"message": "Invalid data", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid data","serializer_errors": serializer.errors, "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
