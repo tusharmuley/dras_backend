@@ -328,19 +328,23 @@ class CreateEmployeeView(APIView):
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
     
     def delete(self, request):
+        
         try:
             print("request.user.role", request.user.role)
+            print("request.user.id", request.user.id)
+            # Only super_admin and admin can delete employees
             if request.user.role != "super_admin" and request.user.role != "admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
             user_id = request.data.get("user_id", None)
             if not user_id:
                 return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
-            if request.user.role == "admin" and request.user.id != user_id:
-                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
             try:
-                user = User.objects.get(id=user_id)
+                user = User.objects.get(id=user_id, created_by=request.user.id)
             except User.DoesNotExist:
                 return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
             user.is_active = False
             user.save()
             return Response({"message": "Employee deleted successfully", "status":status.HTTP_200_OK}, status.HTTP_200_OK)
