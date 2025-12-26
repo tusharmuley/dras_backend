@@ -113,7 +113,7 @@ class CreateAdminView(APIView):
         try:
             if request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
-            queryset = User.objects.filter(role="admin")
+            queryset = User.objects.filter(role="admin", is_active=True)
             serializer = EmployeeSerializer(queryset, many=True)
             return Response({"admins": serializer.data,"message": "Admins fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
@@ -237,7 +237,7 @@ class CreateEmployeeView(APIView):
         try:
             if request.user.role != "admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
-            queryset = User.objects.filter(role="employee",created_by=request.user)
+            queryset = User.objects.filter(role="employee",created_by=request.user, is_active=True)
             serializer = EmployeeSerializer(queryset, many=True)
             return Response({"employees": serializer.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
