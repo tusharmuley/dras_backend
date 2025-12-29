@@ -157,6 +157,7 @@ class DocumentView(APIView):
                      "status": status.HTTP_403_FORBIDDEN},
                     status=status.HTTP_403_FORBIDDEN
                 )
+            full_queryset = queryset
 
             # Filters
             search = request.GET.get("search")
@@ -179,11 +180,27 @@ class DocumentView(APIView):
                     created_at__date__range=[start_date, end_date]
                 )
 
+            all_status_count = {    
+                "all": full_queryset.count(),
+                "pending": full_queryset.filter(current_status="PENDING").count(),
+                "approved": full_queryset.filter(current_status="APPROVED").count(),
+                "rejected": full_queryset.filter(current_status="REJECTED").count(),
+                "draft": full_queryset.filter(current_status="DRAFT").count(),
+            }
+
             # Pagination
             paginator = CustomPagination()
             page = paginator.paginate_queryset(queryset, request)
             serializer = UploadedDocumentReadSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+            data = serializer.data
+            ab= paginator.get_paginated_response(data)
+            return Response(
+                {"message": "Documents retrieved successfully",
+                 "data": ab.data,
+                 "status": status.HTTP_200_OK,
+                 "all_status_count": all_status_count},
+                status=status.HTTP_200_OK
+            )
 
         except Exception as e:
             return Response(
@@ -213,8 +230,24 @@ class DocumentView(APIView):
             print('project_code: ', project_code)
             file = request.FILES.get("file")
             print('file: ', file)
+            document_status = request.data.get("document_status")
 
-            if not all([title, category, project_code, file]):
+            
+            STATUS_CHOICES = [
+            "DRAFT",
+            "PENDING",
+            "APPROVED",
+            "REJECTED"
+            ]
+            if document_status not in STATUS_CHOICES:
+                return Response(
+                    {"message": "Invalid document status",
+                     "data": None,
+                     "status": status.HTTP_400_BAD_REQUEST},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not all([title, category, project_code, file, document_status]):
                 return Response(
                     {"message": "All fields are required to upload a document",
                      "data": None,
@@ -229,7 +262,7 @@ class DocumentView(APIView):
                     project_code=project_code,
                     file=file,
                     uploaded_by=user,
-                    current_status="PENDING"
+                    current_status=document_status
                 )
 
                 DocumentAudit.objects.create(
