@@ -146,7 +146,7 @@ class DocumentView(APIView):
             if user.role == "employee":
                 queryset = UploadedDocument.objects.filter(uploaded_by=user)
             elif user.role == "admin":
-                employees = User.objects.filter(created_by=user)
+                employees = User.objects.filter(created_by=user, is_active=True)
                 employees_ids = employees.values_list('id', flat=True)
                 employees_ids = list(employees_ids)
                 # Get all documents from employees and admin
@@ -702,3 +702,53 @@ class DocumentUploadSignedView(APIView):
                  "status": status.HTTP_500_INTERNAL_SERVER_ERROR},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class CategoryView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            categories = Category.objects.filter(is_active=True)
+            serializer = CategorySerializer(categories, many=True)
+            return Response({"message": "Categories fetched successfully", "data": serializer.data, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message": "Failed to get categories", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def post(self, request):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "You do not have permission to create categories", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            category = request.data.get("category")
+            if not category:
+                return Response({"message": "Category is required", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
+            created_by = request.user
+            category = Category.objects.create(category=category, created_by=created_by)
+            return Response({"message": "Category created successfully", "data": category.id, "status": status.HTTP_201_CREATED}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"message": "Failed to create category", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+   
+    def put(self, request, category_id):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "You do not have permission to update categories", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            category = get_object_or_404(Category, id=category_id, is_active=True)
+            if not category:
+                return Response({"message": "Category not found", "data": None, "status": status.HTTP_404_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            category.category = request.data.get("category")
+            category.save()
+            return Response({"message": "Category updated successfully", "data": category.id, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message": "Failed to update category", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+   
+    def delete(self, request, category_id):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "You do not have permission to delete categories", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            category = get_object_or_404(Category, id=category_id, is_active=True)
+            if not category:
+                return Response({"message": "Category not found", "data": None, "status": status.HTTP_404_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            category.is_active = False
+            category.save()
+            return Response({"message": "Category deleted successfully", "data": category.id, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"message": "Failed to delete category", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

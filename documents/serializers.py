@@ -33,6 +33,7 @@
 from rest_framework import serializers
 from .models import UploadedDocument, DocumentAudit
 from accounts.models import User
+from .models import Category
 
 # -------------------------------
 # Nested serializers for FK expansion (GET only)
@@ -103,4 +104,10 @@ class DocumentAuditReadSerializer(serializers.ModelSerializer):
 class DocumentAuditWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentAudit
+        fields = "__all__"
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
         fields = "__all__"

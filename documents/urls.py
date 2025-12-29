@@ -95,6 +95,8 @@ urlpatterns = [
     name="document-upload-signed"
 ),
 
+    path("category/", CategoryView.as_view(), name="categories"),
+    path("category/<uuid:category_id>/", CategoryView.as_view(), name="categories"),
 ]
 
 # serve media in development only

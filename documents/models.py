@@ -200,3 +200,21 @@ class DocumentAccessLog(models.Model):
 
     class Meta:
         db_table = "dcs_document_access_logs"
+        
+        
+        
+class Category(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.CharField(max_length=100)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+    created_datetime = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_datetime = models.DateTimeField(auto_now=True, null=True, blank=True)
+    
+    class Meta:
+        db_table = "dcs_categories"
+        ordering = ["-created_datetime"]
+        
+    def __str__(self):
+        return self.category
+    
