@@ -231,8 +231,13 @@ class CreateEmployeeView(APIView):
             email = data.get("email", "")
             first_name = data.get("first_name", "")
             last_name = data.get("last_name", "")
+            middle_name = data.get("middle_name", None)
             mobile = data.get("mobile", "")
             password = data.get("password", "")
+            blood_group = data.get("blood_group", None)
+            date_of_birth = data.get("date_of_birth", None)
+            date_of_joining = data.get("date_of_joining", None)
+            gender = data.get("gender", None)
             
             if not username or not employee_id or not email or not first_name or not password:
                 return Response({"message": "All fields are required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
@@ -250,11 +255,16 @@ class CreateEmployeeView(APIView):
                         username=username,
                         password=password,
                         first_name=first_name,
+                        middle_name=middle_name,
                         last_name=last_name,
                         email=email,
                         role="employee",
                         mobile=mobile,
                         employee_id=employee_id,
+                        blood_group=blood_group,
+                        date_of_birth=date_of_birth,
+                        date_of_joining=date_of_joining,
+                        gender=gender,
                         created_by=request.user
                     )
                     return Response({"message": "Employee created successfully", "status":status.HTTP_201_CREATED}, status.HTTP_201_CREATED)

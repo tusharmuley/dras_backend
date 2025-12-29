@@ -17,6 +17,13 @@ class User(AbstractUser):
     created_datetime = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_datetime = models.DateTimeField(auto_now=True, null=True, blank=True)
 
+    # Employee additional fields
+    middle_name = models.CharField(max_length=100, blank=True, null=True)
+    blood_group = models.CharField(max_length=10, blank=True, null=True)
+    date_of_birth = models.DateField(blank=True, null=True)
+    date_of_joining = models.DateField(blank=True, null=True)
+    gender = models.CharField(max_length=20, blank=True, null=True)
+
     # hierarchy mapping
     created_by = models.ForeignKey("self",null=True,  blank=True, on_delete=models.SET_NULL, related_name="created_users")
 
