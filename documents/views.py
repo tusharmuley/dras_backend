@@ -354,6 +354,25 @@ class DocumentView(APIView):
                     status=status.HTTP_200_OK
                 )
 
+            elif action == "draft":
+                remarks = request.data.get("remarks")
+                document.current_status = "DRAFT"
+                document.save()
+
+                DocumentAudit.objects.create(
+                    document=document,
+                    action="DRAFT",
+                    action_by=user,
+                    remarks=remarks
+                )
+
+                return Response(
+                    {"message": "Document rejected successfully",
+                     "data": {"status": document.current_status},
+                     "status": status.HTTP_200_OK},
+                    status=status.HTTP_200_OK
+                )
+
             elif action == "change_category":
                 category = request.data.get("category")
                 document.category = category
