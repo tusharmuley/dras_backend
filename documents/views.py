@@ -147,7 +147,14 @@ class DocumentView(APIView):
                 queryset = UploadedDocument.objects.filter(uploaded_by=user)
             elif user.role == "admin":
                 employees = User.objects.filter(created_by=user)
-                queryset = UploadedDocument.objects.filter(uploaded_by__in=employees)
+                employees_ids = employees.values_list('id', flat=True)
+                employees_ids = list(employees_ids)
+                # Get all documents from employees and admin
+                queryset = UploadedDocument.objects.filter(uploaded_by__in=employees_ids + [user.id])
+                # Exclude employee's draft documents (but keep admin's own drafts)
+                queryset = queryset.exclude(
+                    Q(current_status="DRAFT") & Q(uploaded_by__in=employees_ids)
+                )
             elif user.role == "super_admin":
                 queryset = UploadedDocument.objects.all()
             else:
@@ -214,13 +221,8 @@ class DocumentView(APIView):
     def post(self, request):
         try:
             user = request.user
-            if user.role != "employee":
-                return Response(
-                    {"message": "Only employees can upload documents",
-                     "data": None,
-                     "status": status.HTTP_403_FORBIDDEN},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            if user.role != "employee" and user.role != "admin":
+                return Response({"message": "Only employees and admins can upload documents", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
 
             title = request.data.get("title")
             print('title: ', title)
