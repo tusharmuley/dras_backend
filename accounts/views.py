@@ -438,3 +438,33 @@ class ResetPasswordView(APIView):
         OTP_STORAGE.pop(email, None)
 
         return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
+    
+    
+class ChangePasswordView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if not user:
+                return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            old_password = request.data.get("old_password")
+            new_password = request.data.get("new_password")
+            confirm_password = request.data.get("confirm_password")
+            if not old_password or not new_password or not confirm_password:
+                return Response({"message": "All fields are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if new_password != confirm_password:
+                return Response({"message": "New password and confirm password do not match"}, status=status.HTTP_400_BAD_REQUEST)
+            if not old_password or not new_password:
+                return Response({"message": "Old password and new password are required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(old_password):
+                return Response({"message": "Old password is incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+            user.set_password(new_password)
+            user.save()
+            return Response({"message": "Password changed successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        

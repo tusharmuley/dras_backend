@@ -19,5 +19,6 @@ urlpatterns = [
     re_path(r"^forgot-password/?$", ForgotPasswordView.as_view()),
     re_path(r"^verify-otp/?$", VerifyOTPView.as_view()),
     re_path(r"^reset-password/?$", ResetPasswordView.as_view()),
+    re_path(r"^change-password/?$", ChangePasswordView.as_view()),
 ]
 
