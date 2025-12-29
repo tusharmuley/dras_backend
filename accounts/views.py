@@ -11,7 +11,7 @@ import sys
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
-from accounts.serializers import EmployeeSerializer
+from accounts.serializers import EmployeeSerializer, AuthDataSerializer
 import random
 import datetime
 from django.utils import timezone
@@ -46,29 +46,15 @@ class LoginView(APIView):
                 return Response({"message": "Invalid credentials","status":status.HTTP_401_UNAUTHORIZED},status=status.HTTP_401_UNAUTHORIZED)
 
             token = RefreshToken.for_user(user)
+            serializer = AuthDataSerializer(user)
+            
+            response_data = serializer.data
+            response_data["access"] = str(token.access_token)
+            response_data["refresh"] = str(token)
+            response_data["message"] = "Logged in successfully"
+            response_data["status"] = status.HTTP_200_OK
 
-            return Response({
-                "access": str(token.access_token),
-                "refresh": str(token),
-
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "is_active": user.is_active,
-
-                "employee_id": getattr(user, "employee_id", None),
-                "mobile": getattr(user, "mobile", None),
-
-                "created_by": user.created_by.id if user.created_by else None,
-                "created_datetime": user.created_datetime.isoformat() if user.created_datetime else None,
-                "updated_datetime": user.updated_datetime.isoformat() if user.updated_datetime else None,
-                "status":status.HTTP_200_OK,
-                "message": "Logged in successfully"
-
-            }, status=status.HTTP_200_OK)
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
@@ -82,27 +68,13 @@ class AuthDataView(APIView):
     def get(self, request):
         try:
             user = request.user  # ✅ authenticated user
+            serializer = AuthDataSerializer(user)
+            
+            response_data = serializer.data
+            response_data["message"] = "Auth data fetched successfully"
+            response_data["status"] = status.HTTP_200_OK
 
-            return Response({
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "is_active": user.is_active,
-
-                "employee_id": getattr(user, "employee_id", None),
-                "mobile": getattr(user, "mobile", None),
-
-                "created_by": user.created_by.id if user.created_by else None,
-                "created_datetime": user.created_datetime.isoformat() if user.created_datetime else None,
-                "updated_datetime": user.updated_datetime.isoformat() if user.updated_datetime else None,
-
-                "message": "Auth data fetched successfully",
-                "status":status.HTTP_200_OK
-
-            }, status=status.HTTP_200_OK)
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
@@ -111,6 +83,19 @@ class AuthDataView(APIView):
 
 
 class CreateAdminView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != "super_admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            queryset = User.objects.filter(role="admin", is_active=True)
+            serializer = EmployeeSerializer(queryset, many=True)
+            return Response({"admins": serializer.data,"message": "Admins fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def post(self, request):
         try:
             if request.user.role != "super_admin":
@@ -133,7 +118,6 @@ class CreateAdminView(APIView):
                 return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             if User.objects.filter(email=email).exists():
                 return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
-            
             try:
                 with transaction.atomic():
                     user = User.objects.create_user(
@@ -154,8 +138,87 @@ class CreateAdminView(APIView):
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e),"line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
    
+    def put(self, request):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
+            data = request.data
+            user_id = data.get("user_id", None)
+            
+            if not user_id:
+                return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            # Validation: Admin can only update their own profile
+            if request.user.role == "admin" and user_id != request.user.id:
+                return Response({"message": "Permission denied. Admin can only update their own profile.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
+            email = data.get("email", None)
+            employee_id = data.get("employee_id", None)
+            username = data.get("username", None)
+            password = data.get("password", None)
+            if password:
+                user.set_password(password)
+                user.save()
+            
+            if username and User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if employee_id and User.objects.filter(employee_id=employee_id).exclude(id=user.id).exists():
+                return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if email and User.objects.filter(email=email).exclude(id=user.id).exists():
+                return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            serializer = EmployeeSerializer(user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Admin updated successfully","user": serializer.data, "status":status.HTTP_200_OK}, status.HTTP_200_OK)
+            else:
+                return Response({"message": "Invalid data","serializer_errors": serializer.errors, "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno 
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self, request):
+        try:
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            user_id = request.data.get("user_id", None)
+            if not user_id:
+                return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if request.user.role == "admin" and request.user.id != user_id:
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            user.is_active = False
+            user.save()
+            return Response({"message": "Admin deleted successfully", "status":status.HTTP_200_OK}, status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class CreateEmployeeView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            queryset = User.objects.filter(role="employee",created_by=request.user, is_active=True)
+            serializer = EmployeeSerializer(queryset, many=True)
+            return Response({"employees": serializer.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         try:
@@ -171,27 +234,27 @@ class CreateEmployeeView(APIView):
             mobile = data.get("mobile", "")
             password = data.get("password", "")
             
-            if not username or not employee_id or not email or not first_name or not last_name or not mobile or not password:
+            if not username or not employee_id or not email or not first_name or not password:
                 return Response({"message": "All fields are required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
-            if User.objects.filter(username=data["username"]).exists():
+            if User.objects.filter(username=username).exists():
                 return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
-            if User.objects.filter(employee_id=data["employee_id"]).exists():
+            if User.objects.filter(employee_id=employee_id).exists():
                 return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
-            if User.objects.filter(email=data["email"]).exists():
+            if User.objects.filter(email=email).exists():
                 return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
             try:
                 with transaction.atomic():
                     User.objects.create_user(
-                        username=data["username"],
-                        password=data["password"],
-                        first_name=data.get("first_name", ""),
-                        last_name=data.get("last_name", ""),
-                        email=data.get("email", ""),
+                        username=username,
+                        password=password,
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
                         role="employee",
-                        mobile=data.get("mobile", ""),
-                        employee_id=data.get("employee_id", ""),
+                        mobile=mobile,
+                        employee_id=employee_id,
                         created_by=request.user
                     )
                     return Response({"message": "Employee created successfully", "status":status.HTTP_201_CREATED}, status.HTTP_201_CREATED)
@@ -203,27 +266,83 @@ class CreateEmployeeView(APIView):
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e),"line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
 
-
-class MyEmployeesView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
+    def put(self, request):
         try:
-            if request.user.role == "super_admin":
-                queryset = User.objects.filter(role="admin")
-            elif request.user.role == "admin":
-                queryset = User.objects.filter(role="employee",created_by=request.user)
+            if request.user.role != "admin" and request.user.role != "employee":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
+            data = request.data
+            user_id = data.get("user_id", None)
+            username = data.get("username", None)
+            employee_id = data.get("employee_id", None)
+            email = data.get("email", None)
+            first_name = data.get("first_name", None)
+            last_name = data.get("last_name", None)
+            mobile = data.get("mobile", None)
+            password = data.get("password", None)
+            
+            if not user_id:
+                return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            # Validation: Employee can only update their own profile
+            if request.user.role == "employee" and user_id != request.user.id:
+                return Response({"message": "Permission denied. Employees can only update their own profile.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            # Validation: Admin can update their own profile or employees they created
+            if request.user.role == "admin":
+                if user_id != request.user.id and user.created_by != request.user:
+                    return Response({"message": "Permission denied. Admin can only update their own profile or employees they created.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+
+            if username and User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if employee_id and User.objects.filter(employee_id=employee_id).exclude(id=user.id).exists():
+                return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if email and User.objects.filter(email=email).exclude(id=user.id).exists():
+                return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            if password:
+                user.set_password(password)
+            serializer = EmployeeSerializer(user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Employee updated successfully","user": serializer.data, "status":status.HTTP_200_OK}, status.HTTP_200_OK)
             else:
-                return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
-
-            serializer = EmployeeSerializer(queryset, many=True)
-
-            return Response({"employees": serializer.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
-
+                return Response({"message": "Invalid data","serializer_errors": serializer.errors, "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
-            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR )
+    
+    def delete(self, request):
+        
+        try:
+            print("request.user.role", request.user.role)
+            print("request.user.id", request.user.id)
+            # Only super_admin and admin can delete employees
+            if request.user.role != "super_admin" and request.user.role != "admin":
+                return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
+            
+            user_id = request.data.get("user_id", None)
+            if not user_id:
+                return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                user = User.objects.get(id=user_id, created_by=request.user.id)
+            except User.DoesNotExist:
+                return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            
+            user.is_active = False
+            user.save()
+            return Response({"message": "Employee deleted successfully", "status":status.HTTP_200_OK}, status.HTTP_200_OK)
+        
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        
 
 
 User = get_user_model()
