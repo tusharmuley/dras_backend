@@ -161,6 +161,21 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
 }
+# ---------------CELERY-SETTINGS-----------------
+CELERY_BEAT_SCHEDULER = 'Optick.celery_custom.scheduler.NaiveTimezoneScheduler'
+# Other Celery settings
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+BROKER_URL = 'redis://localhost:6379'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BROKER_URL = 'redis://localhost:6379/0'           # Use DB 0 for broker
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/1'       # U
+CELERY_TIMEZONE = 'Asia/Kolkata' 
+DJANGO_CELERY_BEAT_TZ_AWARE = False
+
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=30),
@@ -169,3 +184,16 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "accounts.User"
+
+# ---------------------smtp settings for email OTP ---------------------
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"   # e.g., smtp.gmail.com
+EMAIL_PORT = 587                          # 465 for SSL, 587 for TLS
+EMAIL_USE_TLS = True                       # True for TLS
+EMAIL_USE_SSL = False                      # Only if using SSL port
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")

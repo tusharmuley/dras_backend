@@ -1,5 +1,4 @@
 from django.shortcuts import render
-
 # Create your views here.
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
@@ -13,7 +12,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
 from accounts.serializers import EmployeeSerializer
+import random
+import datetime
+from django.utils import timezone
+from django.contrib.auth import get_user_model
 
+from .tasks import send_otp_email_task
 
 class LoginView(APIView):
     authentication_classes = []   # 🔥 disable JWT here
@@ -220,3 +224,98 @@ class MyEmployeesView(APIView):
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+User = get_user_model()
+
+# Temporary OTP storage (use DB/Redis in production)
+OTP_STORAGE = {}  # {email: {"otp": 123456, "expiry": datetime}}
+
+# 🔥 All views allow unauthenticated access
+class ForgotPasswordView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            email = request.data.get("email")
+            if not email:
+                return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return Response({"message": "User with this email does not exist"}, status=status.HTTP_404_NOT_FOUND)
+            
+            otp = random.randint(100000, 999999)
+            expiry = timezone.now() + datetime.timedelta(minutes=10)
+            OTP_STORAGE[email] = {"otp": otp, "expiry": expiry}
+
+            # Send OTP asynchronously via Celery
+            send_otp_email_task.delay(email, otp, user.first_name)
+
+            return Response({"message": "OTP sent to email (check your inbox)", "status": status.HTTP_200_OK})
+        
+        except Exception as e:
+            return Response({"message": "Something went wrong", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class VerifyOTPView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+        if not email or not otp:
+            return Response({"message": "Email and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        record = OTP_STORAGE.get(email)
+        if not record or str(record["otp"]) != str(otp):
+            return Response({"message": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if timezone.now() > record["expiry"]:
+            return Response({"message": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({"message": "OTP verified", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+
+class ResetPasswordView(APIView):
+    authentication_classes = []  
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+        password = request.data.get("password")
+        confirm_password = request.data.get("confirm_password")
+
+        if not email or not otp or not password or not confirm_password:
+            return Response(
+                {"message": "Email, OTP, password, and confirm_password are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if password != confirm_password:
+            return Response(
+                {"message": "Password and confirm_password do not match"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        record = OTP_STORAGE.get(email)
+        if not record or str(record["otp"]) != str(otp):
+            return Response({"message": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if timezone.now() > record["expiry"]:
+            return Response({"message": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Set new password
+        user.set_password(password)
+        user.save()
+
+        # Remove OTP after successful reset
+        OTP_STORAGE.pop(email, None)
+
+        return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)

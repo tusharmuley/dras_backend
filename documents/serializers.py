@@ -1,31 +1,106 @@
-from rest_framework import serializers
-from .models import Document
+# from rest_framework import serializers
+# from .models import Document
 
 
-class DocumentSerializer(serializers.ModelSerializer):
-    file_url = serializers.SerializerMethodField()
-    created_by_name = serializers.CharField(
-        source="created_by.username",
-        read_only=True
-    )
+# class DocumentSerializer(serializers.ModelSerializer):
+#     file_url = serializers.SerializerMethodField()
+#     created_by_name = serializers.CharField(
+#         source="created_by.username",
+#         read_only=True
+#     )
     
 
+#     class Meta:
+#         model = Document
+#         fields = [
+#             "id",
+#             "title",
+#             "site_code",
+#             "category",
+#             "current_status",
+#             "file_url",
+#             "created_by_name",
+#             "created_datetime",
+#             "updated_datetime",
+#         ]
+
+#     def get_file_url(self, obj):
+#         request = self.context.get("request")
+#         if obj.file and request:
+#             return request.build_absolute_uri(obj.file.url)
+#         return None
+
+from rest_framework import serializers
+from .models import UploadedDocument, DocumentAudit
+from accounts.models import User
+
+# -------------------------------
+# Nested serializers for FK expansion (GET only)
+# -------------------------------
+class UserNestedSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Document
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role']
+
+# -------------------------------
+# GET serializer for UploadedDocument
+# -------------------------------
+class UploadedDocumentReadSerializer(serializers.ModelSerializer):
+    uploaded_by = UserNestedSerializer(read_only=True)
+    approved_by = UserNestedSerializer(read_only=True)
+
+    class Meta:
+        model = UploadedDocument
         fields = [
             "id",
             "title",
-            "site_code",
             "category",
+            "project_code",
             "current_status",
-            "file_url",
-            "created_by_name",
-            "created_datetime",
-            "updated_datetime",
+            "uid",
+            "file",
+            "uploaded_by",
+            "approved_by",
+            "created_at",
+            "approved_at",
         ]
 
-    def get_file_url(self, obj):
-        request = self.context.get("request")
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
-        return None
+# -------------------------------
+# Default serializer for create/update (POST/PUT)
+# -------------------------------
+class UploadedDocumentWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UploadedDocument
+        fields = [
+            "id",
+            "title",
+            "category",
+            "project_code",
+            "current_status",
+            "uid",
+            "file",
+            "uploaded_by",
+            "approved_by",
+            "created_at",
+            "approved_at",
+            "is_read_only",
+        ]
+        read_only_fields = ["uid", "approved_by", "approved_at", "is_read_only", "created_at"]
+
+# -------------------------------
+# GET serializer for DocumentAudit (expand FK)
+# -------------------------------
+class DocumentAuditReadSerializer(serializers.ModelSerializer):
+    action_by = UserNestedSerializer(read_only=True)
+
+    class Meta:
+        model = DocumentAudit
+        fields = "__all__"
+
+# -------------------------------
+# Default serializer for DocumentAudit create/update
+# -------------------------------
+class DocumentAuditWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentAudit
+        fields = "__all__"

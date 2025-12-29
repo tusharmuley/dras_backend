@@ -14,5 +14,10 @@ urlpatterns = [
     re_path(r"^create-admin/?$", CreateAdminView.as_view()),
     re_path(r"^create-employee/?$", CreateEmployeeView.as_view()),
     re_path(r"^employee_list/?$", MyEmployeesView.as_view()),
+
+    # RESET PASSWORD URLS
+    re_path(r"^forgot-password/?$", ForgotPasswordView.as_view()),
+    re_path(r"^verify-otp/?$", VerifyOTPView.as_view()),
+    re_path(r"^reset-password/?$", ResetPasswordView.as_view()),
 ]
 
