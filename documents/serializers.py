@@ -55,6 +55,7 @@ class UploadedDocumentReadSerializer(serializers.ModelSerializer):
     uploaded_by = UserNestedSerializer(read_only=True)
     approved_by = UserNestedSerializer(read_only=True)
     category = CategoryNestedSerializer(read_only=True)
+    is_signed = serializers.SerializerMethodField()
 
     class Meta:
         model = UploadedDocument
@@ -70,7 +71,12 @@ class UploadedDocumentReadSerializer(serializers.ModelSerializer):
             "approved_by",
             "created_at",
             "approved_at",
+            "is_signed",
         ]
+    
+    def get_is_signed(self, obj):
+        """Check if document has a signed version uploaded"""
+        return obj.versions.filter(version_type="SIGNED").exists()
 
 # -------------------------------
 # Default serializer for create/update (POST/PUT)
