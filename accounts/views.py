@@ -16,6 +16,7 @@ import random
 import datetime
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from documents.utils import CustomPagination
 
 from .tasks import send_otp_email_task
 
@@ -90,8 +91,14 @@ class CreateAdminView(APIView):
             if request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
             queryset = User.objects.filter(role="admin", is_active=True)
+            # Pagination
+            paginator = CustomPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            serializer = EmployeeSerializer(page, many=True)
+            data = serializer.data
+            ab= paginator.get_paginated_response(data)
             serializer = EmployeeSerializer(queryset, many=True)
-            return Response({"admins": serializer.data,"message": "Admins fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+            return Response({"data": ab.data,"message": "Admins fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -211,18 +218,27 @@ class CreateEmployeeView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
-            if request.user.role != "admin":
+            if request.user.role != "admin" and request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
-            queryset = User.objects.filter(role="employee",created_by=request.user, is_active=True)
-            serializer = EmployeeSerializer(queryset, many=True)
-            return Response({"employees": serializer.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+            
+            if request.user.role == "super_admin":
+                queryset = User.objects.filter(role="employee", is_active=True)
+            else:
+                queryset = User.objects.filter(role="employee",created_by=request.user, is_active=True)
+            # Pagination
+            paginator = CustomPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            serializer = EmployeeSerializer(page, many=True)
+            data = serializer.data
+            ab= paginator.get_paginated_response(data)
+            return Response({"data": ab.data,"message": "Employees fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request):
         try:
-            if request.user.role != "admin":
+            if request.user.role != "admin" and request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
 
             data = request.data
@@ -249,6 +265,16 @@ class CreateEmployeeView(APIView):
             if User.objects.filter(email=email).exists():
                 return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
+            if request.user.role == "super_admin":
+                created_by_id = data.get("admin_id", None)
+                if not created_by_id:
+                    return Response({"message": "admin_id is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+                try:
+                    created_by = User.objects.get(id=created_by_id , is_active=True, role="admin")
+                except User.DoesNotExist:
+                    return Response({"message": "Approval not found or is not active", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
+            else:
+                created_by = request.user
             try:
                 with transaction.atomic():
                     User.objects.create_user(
@@ -265,7 +291,7 @@ class CreateEmployeeView(APIView):
                         date_of_birth=date_of_birth,
                         date_of_joining=date_of_joining,
                         gender=gender,
-                        created_by=request.user
+                        created_by=created_by
                     )
                     return Response({"message": "Employee created successfully", "status":status.HTTP_201_CREATED}, status.HTTP_201_CREATED)
             except Exception as e:
@@ -476,5 +502,4 @@ class ChangePasswordView(APIView):
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
         

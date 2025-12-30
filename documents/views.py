@@ -728,8 +728,13 @@ class CategoryView(APIView):
     def get(self, request):
         try:
             categories = Category.objects.filter(is_active=True)
-            serializer = CategorySerializer(categories, many=True)
-            return Response({"message": "Categories fetched successfully", "data": serializer.data, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+            # Pagination
+            paginator = CustomPagination()
+            page = paginator.paginate_queryset(categories, request)
+            serializer = CategorySerializer(page, many=True)
+            data = serializer.data
+            ab= paginator.get_paginated_response(data)
+            return Response({"message": "Categories fetched successfully", "data": ab.data, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message": "Failed to get categories", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
