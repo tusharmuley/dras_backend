@@ -17,6 +17,7 @@ import datetime
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from documents.utils import CustomPagination
+from django.db.models import Q
 
 from .tasks import send_otp_email_task
 
@@ -90,7 +91,7 @@ class CreateAdminView(APIView):
         try:
             if request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
-            queryset = User.objects.filter(role="admin", is_active=True)
+            queryset = User.objects.filter(Q(role="admin") | Q(role="employee"), is_active=True)
             # Pagination
             paginator = CustomPagination()
             page = paginator.paginate_queryset(queryset, request)
