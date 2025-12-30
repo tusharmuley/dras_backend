@@ -539,6 +539,9 @@ class UserProfileDetailView(APIView):
             for field in read_only_fields:
                 data.pop(field, None)
             
+            # Filter out empty/null values - don't update fields with empty strings, None, or null
+            data = {k: v for k, v in data.items() if v not in (None, "", "null", "NULL") and v is not None}
+            
             username = data.get("username", None)
             email = data.get("email", None)
             employee_id = data.get("employee_id", None)
