@@ -108,7 +108,6 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
 from django.http import FileResponse
-from django.core.files import File
 import uuid
 from uuid import uuid4
 import os
@@ -339,36 +338,10 @@ class DocumentView(APIView):
                         document.is_read_only = True
                         document.approved_by = user
                         document.approved_at = timezone.now()
-                        
-                        # Get the current file path
-                        original_file_path = document.file.path
-                        file_name_without_ext = os.path.splitext(os.path.basename(original_file_path))[0]
-                        
-                        # Check if file is DOCX and convert to PDF if needed
-                        if is_docx_file(original_file_path):
-                            # Convert DOCX to PDF to a temporary location
-                            temp_pdf_path = os.path.join(os.path.dirname(original_file_path), f"{file_name_without_ext}_temp.pdf")
-                            convert_docx_to_pdf(original_file_path, temp_pdf_path)
-                            
-                            # Update document's file field to point to the new PDF
-                            with open(temp_pdf_path, 'rb') as pdf_file:
-                                # Generate new filename for the PDF (keep same base name, change extension)
-                                pdf_filename = f"{file_name_without_ext}.pdf"
-                                document.file.save(pdf_filename, File(pdf_file), save=False)
-                            
-                            # Delete the temporary PDF file (Django has saved a copy)
-                            if os.path.exists(temp_pdf_path):
-                                os.remove(temp_pdf_path)
-                            
-                            # Delete the original DOCX file
-                            if os.path.exists(original_file_path):
-                                os.remove(original_file_path)
-                        
-                        # Save document to persist file field changes
                         document.save()
                         
-                        # Get the final PDF path (after potential conversion)
-                        final_pdf_path = document.file.path
+                        # Ensure document is PDF (convert DOCX if needed)
+                        final_pdf_path = ensure_pdf_file(document)
                         
                         # Stamp the PDF with UID
                         stamp_pdf_with_uid(final_pdf_path, uid)

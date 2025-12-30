@@ -65,6 +65,7 @@ from PyPDF2 import PdfReader, PdfWriter
 import io
 import os
 from datetime import datetime
+from django.core.files import File
 
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
@@ -86,6 +87,46 @@ def convert_docx_to_pdf(docx_path, pdf_path):
 def is_docx_file(file_path):
     """Check if the file is a DOCX file based on extension."""
     return file_path.lower().endswith(('.docx', '.doc'))
+
+def ensure_pdf_file(document):
+    """
+    Ensure the document file is a PDF. If it's a DOCX file, convert it to PDF.
+    Updates the document's file field and cleans up temporary/original files.
+    
+    Args:
+        document: UploadedDocument instance
+        
+    Returns:
+        str: Path to the final PDF file
+    """
+    original_file_path = document.file.path
+    file_name_without_ext = os.path.splitext(os.path.basename(original_file_path))[0]
+    
+    # Check if file is DOCX and convert to PDF if needed
+    if is_docx_file(original_file_path):
+        # Convert DOCX to PDF to a temporary location
+        temp_pdf_path = os.path.join(os.path.dirname(original_file_path), f"{file_name_without_ext}_temp.pdf")
+        convert_docx_to_pdf(original_file_path, temp_pdf_path)
+        
+        # Update document's file field to point to the new PDF
+        with open(temp_pdf_path, 'rb') as pdf_file:
+            # Generate new filename for the PDF (keep same base name, change extension)
+            pdf_filename = f"{file_name_without_ext}.pdf"
+            document.file.save(pdf_filename, File(pdf_file), save=False)
+        
+        # Delete the temporary PDF file (Django has saved a copy)
+        if os.path.exists(temp_pdf_path):
+            os.remove(temp_pdf_path)
+        
+        # Delete the original DOCX file
+        if os.path.exists(original_file_path):
+            os.remove(original_file_path)
+        
+        # Save document to persist file field changes
+        document.save()
+    
+    # Return the final PDF path
+    return document.file.path
 
 def stamp_pdf_with_uid(input_pdf_path, uid):
     try:
