@@ -108,8 +108,10 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
 from django.http import FileResponse
+from django.core.files import File
 import uuid
 from uuid import uuid4
+import os
 
 from accounts.models import User
 from .models import *
@@ -329,28 +331,64 @@ class DocumentView(APIView):
             action = request.data.get("action")
 
             if action == "approve":
-                uid = f"BVG-{uuid4().hex[:8].upper()}"
-                document.uid = uid
-                document.current_status = "APPROVED"
-                document.is_read_only = True
-                document.approved_by = user
-                document.approved_at = timezone.now()
-                document.save()
-                stamp_pdf_with_uid(document.file.path, uid)
+                try:
+                    with transaction.atomic():
+                        uid = f"BVG-{uuid4().hex[:8].upper()}"
+                        document.uid = uid
+                        document.current_status = "APPROVED"
+                        document.is_read_only = True
+                        document.approved_by = user
+                        document.approved_at = timezone.now()
+                        
+                        # Get the current file path
+                        original_file_path = document.file.path
+                        file_name_without_ext = os.path.splitext(os.path.basename(original_file_path))[0]
+                        
+                        # Check if file is DOCX and convert to PDF if needed
+                        if is_docx_file(original_file_path):
+                            # Convert DOCX to PDF to a temporary location
+                            temp_pdf_path = os.path.join(os.path.dirname(original_file_path), f"{file_name_without_ext}_temp.pdf")
+                            convert_docx_to_pdf(original_file_path, temp_pdf_path)
+                            
+                            # Update document's file field to point to the new PDF
+                            with open(temp_pdf_path, 'rb') as pdf_file:
+                                # Generate new filename for the PDF (keep same base name, change extension)
+                                pdf_filename = f"{file_name_without_ext}.pdf"
+                                document.file.save(pdf_filename, File(pdf_file), save=False)
+                            
+                            # Delete the temporary PDF file (Django has saved a copy)
+                            if os.path.exists(temp_pdf_path):
+                                os.remove(temp_pdf_path)
+                            
+                            # Delete the original DOCX file
+                            if os.path.exists(original_file_path):
+                                os.remove(original_file_path)
+                        
+                        # Save document to persist file field changes
+                        document.save()
+                        
+                        # Get the final PDF path (after potential conversion)
+                        final_pdf_path = document.file.path
+                        
+                        # Stamp the PDF with UID
+                        stamp_pdf_with_uid(final_pdf_path, uid)
 
-                DocumentAudit.objects.create(
-                    document=document,
-                    action="APPROVED",
-                    action_by=user
-                )
+                        DocumentAudit.objects.create(
+                            document=document,
+                            action="APPROVED",
+                            action_by=user
+                        )
 
-                return Response(
-                    {"message": "Document approved successfully",
-                     "data": {"uid": uid, "status": document.current_status},
-                     "status": status.HTTP_200_OK},
-                    status=status.HTTP_200_OK
-                )
-
+                        return Response(
+                            {"message": "Document approved successfully",
+                            "data": {"uid": uid, "status": document.current_status},
+                            "status": status.HTTP_200_OK},
+                            status=status.HTTP_200_OK
+                    )
+                except Exception as e:
+                    line_number = sys.exc_info()[2].tb_lineno
+                    return Response({"message": "Failed to approve document", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    
             elif action == "reject":
                 remarks = request.data.get("remarks")
                 document.current_status = "REJECTED"

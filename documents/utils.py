@@ -1,6 +1,7 @@
 # =================================PAGINATION=================================
 from rest_framework import pagination
 from rest_framework.response import Response
+from rest_framework import status
 
 class CustomPagination(pagination.PageNumberPagination):
     page_size = None  # No pagination by default (returns all records)
@@ -62,28 +63,53 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from PyPDF2 import PdfReader, PdfWriter
 import io
+import os
 from datetime import datetime
 
+def convert_docx_to_pdf(docx_path, pdf_path):
+    """
+    Convert DOCX file to PDF.
+    Uses docx2pdf library which requires Microsoft Word on Windows.
+    """
+    try:
+        from docx2pdf import convert
+        # Convert DOCX to PDF
+        convert(docx_path, pdf_path)
+        print(f"DOCX converted to PDF successfully: {pdf_path}")
+        return True
+    except ImportError:
+        raise Exception("docx2pdf library is not installed. Please install it using: pip install docx2pdf")
+    except Exception as e:
+        print(f"Failed to convert DOCX to PDF: {e}")
+        raise Exception(f"Failed to convert DOCX to PDF: {str(e)}")
+
+def is_docx_file(file_path):
+    """Check if the file is a DOCX file based on extension."""
+    return file_path.lower().endswith(('.docx', '.doc'))
+
 def stamp_pdf_with_uid(input_pdf_path, uid):
-    reader = PdfReader(input_pdf_path)
-    writer = PdfWriter()
+    try:
+        reader = PdfReader(input_pdf_path)
+        writer = PdfWriter()
 
-    for page in reader.pages:
-        packet = io.BytesIO()
-        can = canvas.Canvas(packet, pagesize=A4)
+        for page in reader.pages:
+            packet = io.BytesIO()
+            can = canvas.Canvas(packet, pagesize=A4)
 
-        can.setFont("Helvetica-Bold", 9)
-        can.drawString(40, 20, f"UID: {uid}")
-        can.drawString(300, 20, f"Approved On: {datetime.now().strftime('%d-%m-%Y')}")
+            can.setFont("Helvetica-Bold", 9)
+            can.drawString(40, 20, f"UID: {uid}")
+            can.drawString(300, 20, f"Approved On: {datetime.now().strftime('%d-%m-%Y')}")
 
-        can.save()
-        packet.seek(0)
+            can.save()
+            packet.seek(0)
 
-        overlay_pdf = PdfReader(packet)
-        page.merge_page(overlay_pdf.pages[0])
-        writer.add_page(page)
+            overlay_pdf = PdfReader(packet)
+            page.merge_page(overlay_pdf.pages[0])
+            writer.add_page(page)
 
-    with open(input_pdf_path, "wb") as f:
-        writer.write(f)
-
-
+        with open(input_pdf_path, "wb") as f:
+            writer.write(f)
+        print("PDF stamped with UID successfully")
+    except Exception as e:
+        print("Failed to stamp PDF with UID", e)
+        raise Exception(e)
