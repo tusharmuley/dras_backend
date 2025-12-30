@@ -116,6 +116,7 @@ from .models import *
 from .serializers import *
 from .utils import *
 from dcs_backend.permissions import *
+import sys
 
 
 # ===========================
@@ -156,7 +157,11 @@ class DocumentView(APIView):
                     Q(current_status="DRAFT") & Q(uploaded_by__in=employees_ids)
                 )
             elif user.role == "super_admin":
+                # Show all documents, but exclude drafts that are NOT uploaded by super_admin
                 queryset = UploadedDocument.objects.all()
+                queryset = queryset.exclude(
+                    Q(current_status="DRAFT") & ~Q(uploaded_by=user)
+                )
             else:
                 return Response(
                     {"message": "You do not have permission to view documents",
@@ -401,12 +406,8 @@ class DocumentView(APIView):
                 )
 
         except Exception as e:
-            return Response(
-                {"message": "Failed to update document",
-                 "data": str(e),
-                 "status": status.HTTP_500_INTERNAL_SERVER_ERROR},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Failed to update document", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # DELETE → Delete Draft / Rejected
     def delete(self, request, document_id):
