@@ -1,15 +1,53 @@
 # =================================PAGINATION=================================
 from rest_framework import pagination
-from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 class CustomPagination(pagination.PageNumberPagination):
-    page_size = 10
+    page_size = None  # No pagination by default (returns all records)
     page_size_query_param = 'page_size'
     max_page_size = 100
     page_query_param = 'page'
 
+    def paginate_queryset(self, queryset, request, view=None):
+        """
+        Override to return all records by default unless pagination params are provided.
+        """
+        page_size = self.get_page_size(request)
+        if page_size is None:
+            # No pagination requested, return all records as a list
+            # Store queryset for get_paginated_response to calculate total_objects
+            self._non_paginated_queryset = queryset
+            return list(queryset)
+        
+        # Reset the flag when pagination is applied
+        self._non_paginated_queryset = None
+        return super().paginate_queryset(queryset, request, view)
+
     def get_paginated_response(self, data):
+        """
+        Return paginated response if pagination was applied, 
+        otherwise return all records without pagination metadata.
+        """
+        # Check if pagination was applied (page attribute exists and is not None)
+        if not hasattr(self, 'page') or self.page is None:
+            # No pagination was applied, return all records
+            # Use stored queryset to get accurate count (handles filtered querysets)
+            total_count = getattr(self, '_non_paginated_queryset', None)
+            if total_count is not None:
+                total_count = total_count.count() if hasattr(total_count, 'count') else len(data)
+            else:
+                total_count = len(data)
+            
+            return Response({
+                'total_objects': total_count,
+                'total_pages': 1,
+                'current_page': 1,
+                'next_page': None,
+                'previous_page': None,
+                'results': data
+            })
+        
+        # Pagination was applied, return paginated response
         return Response({
             'total_objects': self.page.paginator.count,
             'total_pages': self.page.paginator.num_pages,
