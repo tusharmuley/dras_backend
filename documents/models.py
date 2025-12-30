@@ -87,7 +87,9 @@ class UploadedDocument(models.Model):
 
     file = models.FileField(upload_to="dcs/documents/")
 
-    category = models.CharField(max_length=100)
+    category = models.ForeignKey(
+        "Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
+    )
 
     project_code = models.CharField(max_length=100)
 
@@ -167,8 +169,12 @@ class DocumentAudit(models.Model):
 
     remarks = models.TextField(null=True, blank=True)
 
-    old_category = models.CharField(max_length=100, null=True, blank=True)
-    new_category = models.CharField(max_length=100, null=True, blank=True)
+    old_category = models.ForeignKey(
+        "Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="old_category_audits"
+    )
+    new_category = models.ForeignKey(
+        "Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="new_category_audits"
+    )
 
     action_by = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="document_actions"

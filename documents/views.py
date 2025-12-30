@@ -231,8 +231,8 @@ class DocumentView(APIView):
 
             title = request.data.get("title")
             print('title: ', title)
-            category = request.data.get("category")
-            print('category: ', category)
+            category_id = request.data.get("category")
+            print('category: ', category_id)
             project_code = request.data.get("project_code")
             print('project_code: ', project_code)
             file = request.FILES.get("file")
@@ -254,9 +254,20 @@ class DocumentView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            if not all([title, category, project_code, file, document_status]):
+            if not all([title, category_id, project_code, file, document_status]):
                 return Response(
                     {"message": "All fields are required to upload a document",
+                     "data": None,
+                     "status": status.HTTP_400_BAD_REQUEST},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate category exists and is active
+            try:
+                category_obj = Category.objects.get(id=category_id, is_active=True)
+            except Category.DoesNotExist:
+                return Response(
+                    {"message": "Invalid category ID or category is not active",
                      "data": None,
                      "status": status.HTTP_400_BAD_REQUEST},
                     status=status.HTTP_400_BAD_REQUEST
@@ -265,7 +276,7 @@ class DocumentView(APIView):
             with transaction.atomic():
                 document = UploadedDocument.objects.create(
                     title=title,
-                    category=category,
+                    category=category_obj,
                     project_code=project_code,
                     file=file,
                     uploaded_by=user,
@@ -379,20 +390,45 @@ class DocumentView(APIView):
                 )
 
             elif action == "change_category":
-                category = request.data.get("category")
-                document.category = category
+                category_id = request.data.get("category")
+                
+                if not category_id:
+                    return Response(
+                        {"message": "Category ID is required",
+                         "data": None,
+                         "status": status.HTTP_400_BAD_REQUEST},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Validate category exists and is active
+                try:
+                    new_category_obj = Category.objects.get(id=category_id, is_active=True)
+                except Category.DoesNotExist:
+                    return Response(
+                        {"message": "Invalid category ID or category is not active",
+                         "data": None,
+                         "status": status.HTTP_400_BAD_REQUEST},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Store old category before updating
+                old_category_obj = document.category
+                
+                document.category = new_category_obj
                 document.save()
 
                 DocumentAudit.objects.create(
                     document=document,
                     action="CATEGORY_CHANGED",
                     action_by=user,
-                    remarks=category
+                    old_category=old_category_obj,
+                    new_category=new_category_obj,
+                    remarks=request.data.get("remarks")
                 )
 
                 return Response(
                     {"message": "Document category updated successfully",
-                     "data": {"category": category},
+                     "data": {"category_id": str(new_category_obj.id), "category": new_category_obj.category},
                      "status": status.HTTP_200_OK},
                     status=status.HTTP_200_OK
                 )

@@ -43,12 +43,18 @@ class UserNestedSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role']
 
+class CategoryNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'category']
+
 # -------------------------------
 # GET serializer for UploadedDocument
 # -------------------------------
 class UploadedDocumentReadSerializer(serializers.ModelSerializer):
     uploaded_by = UserNestedSerializer(read_only=True)
     approved_by = UserNestedSerializer(read_only=True)
+    category = CategoryNestedSerializer(read_only=True)
 
     class Meta:
         model = UploadedDocument
@@ -93,6 +99,8 @@ class UploadedDocumentWriteSerializer(serializers.ModelSerializer):
 # -------------------------------
 class DocumentAuditReadSerializer(serializers.ModelSerializer):
     action_by = UserNestedSerializer(read_only=True)
+    old_category = CategoryNestedSerializer(read_only=True)
+    new_category = CategoryNestedSerializer(read_only=True)
 
     class Meta:
         model = DocumentAudit
