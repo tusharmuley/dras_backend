@@ -116,6 +116,7 @@ from accounts.models import User
 from .models import *
 from .serializers import *
 from .utils import *
+from .tasks import send_document_approval_email_task
 from dcs_backend.permissions import *
 import sys
 
@@ -350,6 +351,21 @@ class DocumentView(APIView):
                             document=document,
                             action="APPROVED",
                             action_by=user
+                        )
+
+                        # Send approval email to employee asynchronously via Celery
+                        employee = document.uploaded_by
+                        employee_name = employee.first_name or employee.username
+                        approver_name = user.first_name or user.username
+                        approved_date = document.approved_at.strftime('%d-%m-%Y %I:%M %p') if document.approved_at else timezone.now().strftime('%d-%m-%Y %I:%M %p')
+                        
+                        send_document_approval_email_task.delay(
+                            employee_email=employee.email,
+                            employee_name=employee_name,
+                            document_title=document.title,
+                            document_uid=uid,
+                            approved_date=approved_date,
+                            approver_name=approver_name
                         )
 
                         return Response(
