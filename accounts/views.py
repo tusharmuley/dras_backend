@@ -513,3 +513,49 @@ class ChangePasswordView(APIView):
             line_number = sys.exc_info()[2].tb_lineno
             return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        
+        
+        
+class UserProfileDetailView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        try:
+            user = request.user
+            data = dict(request.data)  # Create a mutable copy
+            user_id = data.get("id", None)
+            
+            # Validate user_id is provided and matches authenticated user
+            if not user_id:
+                return Response({"message": "User ID is required", "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Ensure user can only update their own profile
+            if str(user_id) != str(user.id):
+                return Response({"message": "Permission denied. You can only update your own profile.", "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Remove read-only fields that should not be updated via profile update
+            read_only_fields = ["role", "is_active", "created_by", "id", "password", "created_datetime", "updated_datetime"]
+            for field in read_only_fields:
+                data.pop(field, None)
+            
+            username = data.get("username", None)
+            email = data.get("email", None)
+            employee_id = data.get("employee_id", None)
+            if username and User.objects.filter(username=username).exclude(id=user.id).exists():
+                return Response({"message": "Username already exists", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if employee_id and User.objects.filter(employee_id=employee_id).exclude(id=user.id).exists():
+                return Response({"message": "Employee ID already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            if email and User.objects.filter(email=email).exclude(id=user.id).exists():
+                return Response({"message": "Email already exists","status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
+            
+            # Update user profile using serializer
+            serializer = AuthDataSerializer(user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "User profile updated successfully", "data": serializer.data, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": "Invalid data", "errors": serializer.errors, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
