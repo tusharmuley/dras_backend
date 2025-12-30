@@ -166,18 +166,19 @@ class CreateAdminView(APIView):
             if request.user.role == "admin" and user_id != request.user.id:
                 return Response({"message": "Permission denied. Admin can only update their own profile.", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
             
-            if request.user.role == "super_admin" and user.role == "employee":
+            email = data.get("email", None)
+            employee_id = data.get("employee_id", None)
+            username = data.get("username", None)
+            password = data.get("password", None)
+            
+            if request.user.role == "super_admin" and user.role == "employee" and data.get("role", None) != "admin":
                 created_by_id = data.get("admin_id", None)
                 try:
                     created_by = User.objects.get(id=created_by_id , is_active=True, role="admin")
                 except User.DoesNotExist:
                     return Response({"message": "Admin not found or is not active", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
                 data["created_by_id"] = created_by.id
-                
-            email = data.get("email", None)
-            employee_id = data.get("employee_id", None)
-            username = data.get("username", None)
-            password = data.get("password", None)
+
             if password:
                 user.set_password(password)
                 user.save()
