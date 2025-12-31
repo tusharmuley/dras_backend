@@ -28,7 +28,8 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split() if not DEBUG else []
+# Allow all hosts - set to * to allow all
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -103,27 +104,33 @@ DATABASES = {
 # Using default Django User model (django.contrib.auth.models.User)
 # AUTH_USER_MODEL is not set, so Django will use the default User model
 
-ALLOWED_HOSTS = ["*"]
 APPEND_SLASH = False
 
-# CORS Settings - Allow all origins for development/production
+# ============================================
+# CORS SETTINGS - ALLOW ALL ORIGINS
+# ============================================
+# Note: When CORS_ALLOW_ALL_ORIGINS is True, CORS_ALLOW_CREDENTIALS should be False
+# for browser compatibility. JWT tokens work fine without credentials.
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False  # Set to False when allowing all origins
 
-# Allow all headers
+# Comprehensive list of allowed headers
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
     'authorization',
     'content-type',
+    'content-disposition',
     'dnt',
     'origin',
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-forwarded-for',
+    'x-forwarded-proto',
 ]
 
-# Allow all HTTP methods
+# Allow all HTTP methods including OPTIONS for preflight
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -131,6 +138,7 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
+    'HEAD',
 ]
 
 # Expose headers that frontend might need
@@ -139,6 +147,9 @@ CORS_EXPOSE_HEADERS = [
     'content-length',
     'authorization',
 ]
+
+# Preflight cache duration (24 hours)
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 
 
