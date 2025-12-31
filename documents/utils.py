@@ -137,9 +137,18 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             packet = io.BytesIO()
             can = canvas.Canvas(packet, pagesize=A4)
 
-            can.setFont("Helvetica-Bold", 9)
-            can.drawString(40, 20, f"UID: {uid}")
-            can.drawString(300, 20, f"Approved On: {datetime.now().strftime('%d-%m-%Y')}")
+            can.setFont("Helvetica-Bold", 8)
+            # Right bottom corner - UID above, Approved On below
+            # A4 width is 595.27 points, using ~450 for right alignment
+            uid_text = f"UID: {uid}"
+            approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
+            
+            X_POSITION = 430   # 👈 control left/right here
+            Y_UID = 32
+            Y_APPROVED = 22
+
+            can.drawString(X_POSITION, Y_UID, uid_text)
+            can.drawString(X_POSITION, Y_APPROVED, approved_text)
 
             can.save()
             packet.seek(0)
