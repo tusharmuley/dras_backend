@@ -466,6 +466,20 @@ class DocumentView(APIView):
                     print(f"Error in draft process: {str(e)}, line: {line_number}")
                     return Response({"message": "Failed to move document to draft", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+            elif action == "pending":
+                try:
+                    document.current_status = "PENDING"
+                    document.save()
+                    DocumentAudit.objects.create(
+                        document=document,
+                        action="PENDING",
+                        action_by=user
+                    )
+                    return Response({"message": "Document moved to pending successfully","data": {"status": document.current_status},"status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+                except Exception as e:
+                    line_number = sys.exc_info()[2].tb_lineno
+                    print(f"Error in pending process: {str(e)}, line: {line_number}")
+                    return Response({"message": "Failed to move document to pending", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             elif action == "change_category":
                 category_id = request.data.get("category")
                 
