@@ -67,53 +67,214 @@ import os
 from datetime import datetime
 from django.core.files import File
 
+def convert_docx_to_pdf_using_libreoffice(docx_path, pdf_path):
+    """
+    Convert DOCX to PDF using LibreOffice command-line tool.
+    Works on both Windows and Linux.
+    """
+    import platform
+    import subprocess
+    import shutil
+    
+    # Find LibreOffice executable
+    if platform.system() == 'Windows':
+        # Common Windows paths for LibreOffice
+        possible_paths = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+        soffice_cmd = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                soffice_cmd = path
+                break
+        
+        # Also try to find it in PATH
+        if not soffice_cmd:
+            soffice_cmd = shutil.which("soffice")
+    else:
+        # Linux/Unix - try common locations or PATH
+        soffice_cmd = shutil.which("soffice") or shutil.which("libreoffice")
+    
+    if not soffice_cmd:
+        raise Exception(
+            "LibreOffice is not installed or not found in PATH. "
+            "Please install LibreOffice:\n"
+            "- Linux: sudo apt-get install libreoffice (or use your package manager)\n"
+            "- Windows: Download from https://www.libreoffice.org/"
+        )
+    
+    # Get output directory
+    output_dir = os.path.dirname(pdf_path)
+    
+    try:
+        # LibreOffice command: soffice --headless --convert-to pdf --outdir <output_dir> <input_file>
+        cmd = [
+            soffice_cmd,
+            "--headless",
+            "--convert-to", "pdf",
+            "--outdir", output_dir,
+            docx_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,  # 60 second timeout
+            check=True
+        )
+        
+        # LibreOffice creates PDF with same name as input file
+        input_basename = os.path.splitext(os.path.basename(docx_path))[0]
+        generated_pdf = os.path.join(output_dir, f"{input_basename}.pdf")
+        
+        # If the generated PDF has a different name, rename it
+        if os.path.exists(generated_pdf) and generated_pdf != pdf_path:
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+            os.rename(generated_pdf, pdf_path)
+        
+        if not os.path.exists(pdf_path):
+            raise Exception(f"PDF was not generated. Expected: {pdf_path}")
+        
+        print(f"DOCX converted to PDF successfully using LibreOffice: {pdf_path}")
+        return True
+        
+    except subprocess.TimeoutExpired:
+        raise Exception("LibreOffice conversion timed out. The document may be too large or complex.")
+    except subprocess.CalledProcessError as e:
+        error_output = e.stderr or e.stdout or "Unknown error"
+        raise Exception(f"LibreOffice conversion failed: {error_output}")
+    except Exception as e:
+        raise Exception(f"Failed to convert DOCX to PDF using LibreOffice: {str(e)}")
+
+
 def convert_docx_to_pdf(docx_path, pdf_path):
     """
     Convert DOCX file to PDF.
-    Uses docx2pdf library which requires Microsoft Word on Windows.
+    Cross-platform solution:
+    - On Windows: Tries docx2pdf first (requires Microsoft Word), falls back to LibreOffice
+    - On Linux: Uses LibreOffice command-line tool (most reliable)
     """
     import platform
-    import sys
+    import subprocess
+    import shutil
     
-    try:
-        from docx2pdf import convert
-        
-        # On Windows, initialize COM before conversion (required for docx2pdf)
-        if platform.system() == 'Windows':
+    system = platform.system()
+    
+    # On Linux, prefer LibreOffice (more reliable)
+    if system == 'Linux':
+        try:
+            return convert_docx_to_pdf_using_libreoffice(docx_path, pdf_path)
+        except Exception as e:
+            # If LibreOffice fails, try docx2pdf as fallback
+            print(f"LibreOffice conversion failed, trying docx2pdf: {e}")
+            try:
+                from docx2pdf import convert
+                convert(docx_path, pdf_path)
+                print(f"DOCX converted to PDF successfully using docx2pdf: {pdf_path}")
+                return True
+            except ImportError:
+                raise Exception(
+                    f"LibreOffice conversion failed: {str(e)}\n"
+                    "docx2pdf is also not available. Please install one of:\n"
+                    "- LibreOffice: sudo apt-get install libreoffice\n"
+                    "- docx2pdf: pip install docx2pdf (requires LibreOffice on Linux)"
+                )
+            except Exception as docx2pdf_error:
+                raise Exception(
+                    f"Both conversion methods failed.\n"
+                    f"LibreOffice error: {str(e)}\n"
+                    f"docx2pdf error: {str(docx2pdf_error)}\n"
+                    "Please ensure LibreOffice is installed: sudo apt-get install libreoffice"
+                )
+    
+    # On Windows, try docx2pdf first (requires Microsoft Word)
+    elif system == 'Windows':
+        try:
+            from docx2pdf import convert
+            
+            # Initialize COM before conversion (required for docx2pdf on Windows)
             try:
                 import pythoncom
-                # Initialize COM for this thread (required for COM operations)
-                # This must be called before any COM operations
                 try:
                     pythoncom.CoInitialize()
                 except pythoncom.com_error as com_err:
-                    # Error code -2147221008 means "CoInitialize has not been called"
-                    # If we get a different error, COM might already be initialized
                     error_code = com_err.args[0] if com_err.args else None
                     if error_code == -2147221008:
-                        # This shouldn't happen if we just called CoInitialize, but handle it
                         raise Exception("COM initialization failed. Please ensure Microsoft Word is installed.")
-                    # Otherwise, COM might already be initialized, which is okay
                     pass
             except ImportError:
-                # pywin32 not installed - docx2pdf should handle this
                 print("Warning: pywin32 not installed. COM initialization skipped.")
             except Exception as com_error:
                 print(f"Warning: COM initialization issue: {com_error}")
-        
-        # Convert DOCX to PDF
-        convert(docx_path, pdf_path)
-        print(f"DOCX converted to PDF successfully: {pdf_path}")
-        return True
-    except ImportError:
-        raise Exception("docx2pdf library is not installed. Please install it using: pip install docx2pdf")
-    except Exception as e:
-        print(f"Failed to convert DOCX to PDF: {e}")
-        # Re-raise with more context
-        error_msg = str(e)
-        if "CoInitialize" in error_msg or "-2147221008" in error_msg:
-            raise Exception(f"Failed to convert DOCX to PDF: COM initialization error. Make sure Microsoft Word is installed and pywin32 is available. Original error: {error_msg}")
-        raise Exception(f"Failed to convert DOCX to PDF: {error_msg}")
+            
+            # Convert DOCX to PDF using docx2pdf
+            convert(docx_path, pdf_path)
+            print(f"DOCX converted to PDF successfully using docx2pdf: {pdf_path}")
+            return True
+            
+        except ImportError:
+            # docx2pdf not installed, try LibreOffice
+            print("docx2pdf not available, trying LibreOffice...")
+            try:
+                return convert_docx_to_pdf_using_libreoffice(docx_path, pdf_path)
+            except Exception as lo_error:
+                raise Exception(
+                    "Neither docx2pdf nor LibreOffice is available.\n"
+                    "Please install one of:\n"
+                    "- docx2pdf: pip install docx2pdf (requires Microsoft Word)\n"
+                    "- LibreOffice: Download from https://www.libreoffice.org/\n"
+                    f"LibreOffice error: {str(lo_error)}"
+                )
+        except Exception as e:
+            error_msg = str(e)
+            # If docx2pdf fails, try LibreOffice as fallback
+            print(f"docx2pdf conversion failed: {error_msg}, trying LibreOffice...")
+            try:
+                return convert_docx_to_pdf_using_libreoffice(docx_path, pdf_path)
+            except Exception as lo_error:
+                # Both methods failed
+                if "CoInitialize" in error_msg or "-2147221008" in error_msg:
+                    raise Exception(
+                        f"Both conversion methods failed.\n"
+                        f"docx2pdf error: COM initialization error. Make sure Microsoft Word is installed and pywin32 is available.\n"
+                        f"LibreOffice error: {str(lo_error)}\n"
+                        "Please install either Microsoft Word (for docx2pdf) or LibreOffice."
+                    )
+                raise Exception(
+                    f"Both conversion methods failed.\n"
+                    f"docx2pdf error: {error_msg}\n"
+                    f"LibreOffice error: {str(lo_error)}\n"
+                    "Please install either Microsoft Word (for docx2pdf) or LibreOffice."
+                )
+    
+    # Other platforms (macOS, etc.)
+    else:
+        # Try LibreOffice first (works on macOS too)
+        try:
+            return convert_docx_to_pdf_using_libreoffice(docx_path, pdf_path)
+        except Exception as lo_error:
+            # Fall back to docx2pdf
+            try:
+                from docx2pdf import convert
+                convert(docx_path, pdf_path)
+                print(f"DOCX converted to PDF successfully using docx2pdf: {pdf_path}")
+                return True
+            except ImportError:
+                raise Exception(
+                    f"LibreOffice conversion failed: {str(lo_error)}\n"
+                    "docx2pdf is also not available. Please install one of:\n"
+                    "- LibreOffice\n"
+                    "- docx2pdf: pip install docx2pdf"
+                )
+            except Exception as docx2pdf_error:
+                raise Exception(
+                    f"Both conversion methods failed.\n"
+                    f"LibreOffice error: {str(lo_error)}\n"
+                    f"docx2pdf error: {str(docx2pdf_error)}"
+                )
 
 def is_docx_file(file_path):
     """Check if the file is a DOCX file based on extension."""
@@ -172,7 +333,7 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             # Right bottom corner - UID above, Approved On below
             # A4 width is 595.27 points, using ~450 for right alignment
             uid_text = f"UID: {uid}"
-            # approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
+            approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
             
             X_POSITION = 430   # 👈 control left/right here
             Y_UID = 32
