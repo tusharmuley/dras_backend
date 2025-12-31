@@ -72,8 +72,35 @@ def convert_docx_to_pdf(docx_path, pdf_path):
     Convert DOCX file to PDF.
     Uses docx2pdf library which requires Microsoft Word on Windows.
     """
+    import platform
+    import sys
+    
     try:
         from docx2pdf import convert
+        
+        # On Windows, initialize COM before conversion (required for docx2pdf)
+        if platform.system() == 'Windows':
+            try:
+                import pythoncom
+                # Initialize COM for this thread (required for COM operations)
+                # This must be called before any COM operations
+                try:
+                    pythoncom.CoInitialize()
+                except pythoncom.com_error as com_err:
+                    # Error code -2147221008 means "CoInitialize has not been called"
+                    # If we get a different error, COM might already be initialized
+                    error_code = com_err.args[0] if com_err.args else None
+                    if error_code == -2147221008:
+                        # This shouldn't happen if we just called CoInitialize, but handle it
+                        raise Exception("COM initialization failed. Please ensure Microsoft Word is installed.")
+                    # Otherwise, COM might already be initialized, which is okay
+                    pass
+            except ImportError:
+                # pywin32 not installed - docx2pdf should handle this
+                print("Warning: pywin32 not installed. COM initialization skipped.")
+            except Exception as com_error:
+                print(f"Warning: COM initialization issue: {com_error}")
+        
         # Convert DOCX to PDF
         convert(docx_path, pdf_path)
         print(f"DOCX converted to PDF successfully: {pdf_path}")
@@ -82,7 +109,11 @@ def convert_docx_to_pdf(docx_path, pdf_path):
         raise Exception("docx2pdf library is not installed. Please install it using: pip install docx2pdf")
     except Exception as e:
         print(f"Failed to convert DOCX to PDF: {e}")
-        raise Exception(f"Failed to convert DOCX to PDF: {str(e)}")
+        # Re-raise with more context
+        error_msg = str(e)
+        if "CoInitialize" in error_msg or "-2147221008" in error_msg:
+            raise Exception(f"Failed to convert DOCX to PDF: COM initialization error. Make sure Microsoft Word is installed and pywin32 is available. Original error: {error_msg}")
+        raise Exception(f"Failed to convert DOCX to PDF: {error_msg}")
 
 def is_docx_file(file_path):
     """Check if the file is a DOCX file based on extension."""
