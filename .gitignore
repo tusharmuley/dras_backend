@@ -29,7 +29,7 @@ db.sqlite3
 staticfiles/
 
 # Media uploads (documents, user uploads)
-media/
+# media/
 
 # Logs
 *.log
