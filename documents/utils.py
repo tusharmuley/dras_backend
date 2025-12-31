@@ -168,7 +168,7 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             packet = io.BytesIO()
             can = canvas.Canvas(packet, pagesize=A4)
 
-            can.setFont("Helvetica-Bold", 8)
+            can.setFont("Helvetica", 8)
             # Right bottom corner - UID above, Approved On below
             # A4 width is 595.27 points, using ~450 for right alignment
             uid_text = f"UID: {uid}"
