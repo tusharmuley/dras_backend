@@ -49,7 +49,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', 
+    'corsheaders.middleware.CorsMiddleware',  # Must be first
+    'dcs_backend.cors_middleware.CustomCorsMiddleware',  # Backup CORS middleware
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -109,6 +110,25 @@ APPEND_SLASH = False
 # ============================================
 # CORS SETTINGS - ALLOW ALL ORIGINS
 # ============================================
+# Backend is configured for HTTP now. Will work perfectly when moved to HTTPS later.
+#
+# Current Setup: HTTP Backend (http://34.93.251.200)
+# - CORS is fully configured and ready
+# - All origins allowed
+# - Works with HTTP frontends
+#
+# For Testing with HTTP Frontend:
+# - Use http://34.93.251.200/api/ as your API URL
+# - Works perfectly for local development or HTTP-hosted frontends
+#
+# When Moving to HTTPS Later:
+# - Just set up SSL certificate (Let's Encrypt, Cloudflare, etc.)
+# - Change backend URL to https://yourdomain.com
+# - No code changes needed - CORS settings work for both HTTP and HTTPS
+#
+# Note: HTTPS frontend (Netlify) cannot call HTTP backend due to browser security.
+# This is expected and will be resolved when backend moves to HTTPS.
+#
 # Note: When CORS_ALLOW_ALL_ORIGINS is True, CORS_ALLOW_CREDENTIALS should be False
 # for browser compatibility. JWT tokens work fine without credentials.
 CORS_ALLOW_ALL_ORIGINS = True
