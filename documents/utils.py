@@ -330,17 +330,15 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             can = canvas.Canvas(packet, pagesize=A4)
 
             can.setFont("Helvetica", 8)
-            # Right bottom corner - UID above, Approved On below
-            # A4 width is 595.27 points, using ~450 for right alignment
+            # Right bottom corner - only UID text (no approved date)
+            # A4 width is 595.27 points, using ~430 for right alignment
             uid_text = f"UID: {uid}"
-            # approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
-            
-            X_POSITION = 430   # 👈 control left/right here
-            Y_UID = 32
-            Y_APPROVED = 22
 
+            X_POSITION = 430   # control left/right here
+            Y_UID = 32
+
+            # Draw only the UID on the page
             can.drawString(X_POSITION, Y_UID, uid_text)
-            can.drawString(X_POSITION, Y_APPROVED)
 
             can.save()
             packet.seek(0)
