@@ -335,7 +335,8 @@ class DocumentView(APIView):
                 if action == "approve":
                     try:
                         with transaction.atomic():
-                            uid = f"BVG-{uuid4().hex[:8].upper()}"
+                            year_month = timezone.now().strftime('%Y%m')
+                            uid = f"{year_month}{uuid4().hex[:8].upper()}"
                             document.uid = uid
                             document.current_status = "APPROVED"
                             document.is_read_only = True
