@@ -116,7 +116,7 @@ from accounts.models import User
 from .models import *
 from .serializers import *
 from .utils import *
-from .tasks import send_document_approval_email_task
+from .tasks import send_document_approval_email_task, send_document_rejection_email_task
 from dcs_backend.permissions import *
 import sys
 
@@ -174,7 +174,7 @@ class DocumentView(APIView):
             full_queryset = queryset
 
             # Filters
-            search = request.GET.get("search")
+            search = request.GET.get("q")
             status_filter = request.GET.get("status")
             start_date = request.GET.get("start_date")
             end_date = request.GET.get("end_date")
@@ -379,42 +379,92 @@ class DocumentView(APIView):
                     return Response({"message": "Failed to approve document", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                     
             elif action == "reject":
-                remarks = request.data.get("remarks")
-                document.current_status = "REJECTED"
-                document.save()
+                try:
+                    remarks = request.data.get("remarks")
+                    document.current_status = "REJECTED"
+                    document.save()
 
-                DocumentAudit.objects.create(
-                    document=document,
-                    action="REJECTED",
-                    action_by=user,
-                    remarks=remarks
-                )
+                    DocumentAudit.objects.create(
+                        document=document,
+                        action="REJECTED",
+                        action_by=user,
+                        remarks=remarks
+                    )
 
-                return Response(
-                    {"message": "Document rejected successfully",
-                     "data": {"status": document.current_status},
-                     "status": status.HTTP_200_OK},
-                    status=status.HTTP_200_OK
-                )
+                    # Send rejection email to employee asynchronously via Celery
+                    employee = document.uploaded_by
+                    if not employee or not employee.email:
+                        print(f"Warning: Employee or email not found for document rejection. Document ID: {document.id}")
+                    else:
+                        employee_name = employee.first_name or employee.username
+                        approver_name = user.first_name or user.username
+                        rejected_date = timezone.now().strftime('%d-%m-%Y %I:%M %p')
+                        
+                        print(f"Attempting to send rejection email to {employee.email} for document: {document.title}")
+                        send_document_rejection_email_task.delay(
+                            employee_email=employee.email,
+                            employee_name=employee_name,
+                            document_title=document.title,
+                            rejected_date=rejected_date,
+                            approver_name=approver_name,
+                            remarks=remarks
+                        )
+                        print(f"Rejection email task queued successfully for {employee.email}")
+
+                    return Response(
+                        {"message": "Document rejected successfully",
+                         "data": {"status": document.current_status},
+                         "status": status.HTTP_200_OK},
+                        status=status.HTTP_200_OK
+                    )
+                except Exception as e:
+                    line_number = sys.exc_info()[2].tb_lineno
+                    print(f"Error in rejection process: {str(e)}, line: {line_number}")
+                    return Response({"message": "Failed to reject document", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             elif action == "draft":
-                remarks = request.data.get("remarks")
-                document.current_status = "DRAFT"
-                document.save()
+                try:
+                    remarks = request.data.get("remarks")
+                    document.current_status = "DRAFT"
+                    document.save()
 
-                DocumentAudit.objects.create(
-                    document=document,
-                    action="DRAFT",
-                    action_by=user,
-                    remarks=remarks
-                )
+                    DocumentAudit.objects.create(
+                        document=document,
+                        action="DRAFT",
+                        action_by=user,
+                        remarks=remarks
+                    )
 
-                return Response(
-                    {"message": "Document rejected successfully",
-                     "data": {"status": document.current_status},
-                     "status": status.HTTP_200_OK},
-                    status=status.HTTP_200_OK
-                )
+                    # Send rejection email to employee asynchronously via Celery (same as reject action)
+                    employee = document.uploaded_by
+                    if not employee or not employee.email:
+                        print(f"Warning: Employee or email not found for document draft. Document ID: {document.id}")
+                    else:
+                        employee_name = employee.first_name or employee.username
+                        approver_name = user.first_name or user.username
+                        rejected_date = timezone.now().strftime('%d-%m-%Y %I:%M %p')
+                        
+                        print(f"Attempting to send rejection email (draft) to {employee.email} for document: {document.title}")
+                        send_document_rejection_email_task.delay(
+                            employee_email=employee.email,
+                            employee_name=employee_name,
+                            document_title=document.title,
+                            rejected_date=rejected_date,
+                            approver_name=approver_name,
+                            remarks=remarks
+                        )
+                        print(f"Rejection email task queued successfully (draft) for {employee.email}")
+
+                    return Response(
+                        {"message": "Document moved to draft successfully",
+                         "data": {"status": document.current_status},
+                         "status": status.HTTP_200_OK},
+                        status=status.HTTP_200_OK
+                    )
+                except Exception as e:
+                    line_number = sys.exc_info()[2].tb_lineno
+                    print(f"Error in draft process: {str(e)}, line: {line_number}")
+                    return Response({"message": "Failed to move document to draft", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             elif action == "change_category":
                 category_id = request.data.get("category")
@@ -460,13 +510,21 @@ class DocumentView(APIView):
                     status=status.HTTP_200_OK
                 )
 
-            else:
-                return Response(
-                    {"message": "Invalid action specified",
-                     "data": None,
-                     "status": status.HTTP_400_BAD_REQUEST},
-                    status=status.HTTP_400_BAD_REQUEST
+            elif action == "update_content":
+                file = request.FILES.get("file")
+                if not file:
+                    return Response({"message": "File is required to update content", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
+                document.file = file
+                document.save()
+                DocumentAudit.objects.create(
+                    document=document,
+                    action="CONTENT_UPDATED",
+                    action_by=user
                 )
+                return Response({"message": "Document content updated successfully", "status": status.HTTP_200_OK},status=status.HTTP_200_OK)
+            
+            else:
+                return Response({"message": "Invalid action specified", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             line_number = sys.exc_info()[2].tb_lineno

@@ -108,3 +108,123 @@ def get_document_approval_email_html(employee_name, document_title, document_uid
     """
     return html_content
 
+
+def get_document_rejection_email_html(employee_name, document_title, rejected_date, approver_name, remarks=None):
+    """
+    Returns HTML content for document rejection email.
+    """
+    remarks_section = ""
+    if remarks:
+        remarks_section = f"""
+                <div class="remarks-section">
+                    <p><strong>Remarks:</strong></p>
+                    <p style="background-color: #fff3cd; padding: 10px; border-radius: 5px; border-left: 4px solid #ffc107;">{remarks}</p>
+                </div>
+        """
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Document Rejected</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                margin: 0; padding: 0;
+            }}
+            .container {{
+                width: 100%;
+                max-width: 600px;
+                margin: 50px auto;
+                background-color: #ffffff;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .header img {{
+                width: 150px;
+            }}
+            .content {{
+                font-size: 16px;
+                line-height: 1.5;
+                color: #333333;
+            }}
+            .reject-badge {{
+                display: inline-block;
+                background-color: #f44336;
+                color: #ffffff;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: bold;
+                margin: 10px 0;
+            }}
+            .document-info {{
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 20px 0;
+                border-left: 4px solid #f44336;
+            }}
+            .document-info p {{
+                margin: 8px 0;
+            }}
+            .document-info strong {{
+                color: #f44336;
+            }}
+            .remarks-section {{
+                margin: 20px 0;
+            }}
+            .action-button {{
+                display: inline-block;
+                background-color: #1a73e8;
+                color: #ffffff;
+                padding: 12px 24px;
+                text-decoration: none;
+                border-radius: 5px;
+                margin: 20px 0;
+                font-weight: bold;
+            }}
+            .footer {{
+                margin-top: 30px;
+                font-size: 12px;
+                color: #777777;
+                text-align: center;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <img src="https://framerusercontent.com/images/65HA7ldXaCcBX1TyIlKb7kJz1iA.png" alt="Company Logo">
+            </div>
+            <div class="content">
+                <p>Hi {employee_name},</p>
+                <p>We regret to inform you that your document has been rejected.</p>
+                <div style="text-align: center;">
+                    <span class="reject-badge">✗ REJECTED</span>
+                </div>
+                <div class="document-info">
+                    <p><strong>Document Title:</strong> {document_title}</p>
+                    <p><strong>Rejected By:</strong> {approver_name}</p>
+                    <p><strong>Rejected Date:</strong> {rejected_date}</p>
+                </div>
+                {remarks_section}
+                <p>Please review the document and check your drafts. You can make necessary corrections and resubmit the document for approval.</p>
+                <p>If you have any questions, please contact your administrator.</p>
+                <p>Thanks,<br>Team Quantian Technologies</p>
+            </div>
+            <div class="footer">
+                &copy; 2025 Quantian Technologies. All rights reserved.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
