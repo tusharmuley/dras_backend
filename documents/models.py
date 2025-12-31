@@ -224,3 +224,15 @@ class Category(models.Model):
     def __str__(self):
         return self.category
     
+    
+class ProjectCode(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project_code = models.CharField(max_length=100)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+    created_datetime = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_datetime = models.DateTimeField(auto_now=True, null=True, blank=True)
+    
+    class Meta:
+        db_table = "dcs_project_codes"
+        ordering = ["-created_datetime"]

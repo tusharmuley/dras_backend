@@ -80,6 +80,12 @@ urlpatterns = [
     path("category", CategoryView.as_view(), name="categories-no-slash"), #for without slash also accept request
     path("category/<uuid:category_id>/", CategoryView.as_view(), name="category-detail"),
     path("category/<uuid:category_id>", CategoryView.as_view(), name="category-detail-no-slash"), #for without slash also accept request
+    
+    # for project code urls 
+    path("project-code/", ProjectCodeView.as_view(), name="project-codes"),
+    path("project-code", ProjectCodeView.as_view(), name="project-codes-no-slash"), #for without slash also accept request
+    path("project-code/<uuid:project_code_id>/", ProjectCodeView.as_view(), name="project-code-detail"),
+    path("project-code/<uuid:project_code_id>", ProjectCodeView.as_view(), name="project-code-detail-no-slash"), #for without slash also accept request
 ]
 
 # serve media in development only

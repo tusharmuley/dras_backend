@@ -898,3 +898,66 @@ class CategoryView(APIView):
             return Response({"message": "Category deleted successfully", "data": category.id, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"message": "Failed to delete category", "data": str(e), "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProjectCodeView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            project_codes = ProjectCode.objects.filter(is_active=True)
+            # Pagination
+            paginator = CustomPagination()
+            page = paginator.paginate_queryset(project_codes, request)
+            serializer = ProjectCodeSerializer(page, many=True)
+            data = serializer.data
+            ab= paginator.get_paginated_response(data)
+            return Response({"message": "Project codes fetched successfully", "data": ab.data, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Failed to get project codes", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        try:
+            if request.user.role != "super_admin":
+                return Response({"message": "You do not have permission to create project codes", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            project_code = request.data.get("project_code")
+            if not project_code:
+                return Response({"message": "Project code is required", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
+            created_by = request.user
+            project_code = ProjectCode.objects.create(project_code=project_code, created_by=created_by)
+            return Response({"message": "Project code created successfully", "data": project_code.id, "status": status.HTTP_201_CREATED}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Failed to create project code", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    
+    def put(self, request, project_code_id):
+        try:
+            if request.user.role != "super_admin":
+                return Response({"message": "You do not have permission to update project codes", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            project_code = get_object_or_404(ProjectCode, id=project_code_id, is_active=True)
+            if not project_code:
+                return Response({"message": "Project code not found", "data": None, "status": status.HTTP_404_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            project_code.project_code = request.data.get("project_code")
+            project_code.save()
+            return Response({"message": "Project code updated successfully", "data": project_code.id, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Failed to update project code", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    
+    def delete(self, request, project_code_id):
+        try:
+            if request.user.role != "super_admin":
+                return Response({"message": "You do not have permission to delete project codes", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
+            project_code = get_object_or_404(ProjectCode, id=project_code_id, is_active=True)
+            if not project_code:
+                return Response({"message": "Project code not found", "data": None, "status": status.HTTP_404_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
+            project_code.is_active = False
+            project_code.save()
+            return Response({"message": "Project code deleted successfully", "data": project_code.id, "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Failed to delete project code", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
