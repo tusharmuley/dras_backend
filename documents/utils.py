@@ -333,14 +333,14 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             # Right bottom corner - UID above, Approved On below
             # A4 width is 595.27 points, using ~450 for right alignment
             uid_text = f"UID: {uid}"
-            approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
+            # approved_text = f"Approved On: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}"
             
             X_POSITION = 430   # 👈 control left/right here
             Y_UID = 32
             Y_APPROVED = 22
 
             can.drawString(X_POSITION, Y_UID, uid_text)
-            can.drawString(X_POSITION, Y_APPROVED, approved_text)
+            can.drawString(X_POSITION, Y_APPROVED)
 
             can.save()
             packet.seek(0)
