@@ -273,13 +273,23 @@ class DocumentView(APIView):
                      "data": None,
                      "status": status.HTTP_400_BAD_REQUEST},
                     status=status.HTTP_400_BAD_REQUEST
+                )            
+            # If valid UUID, check if ProjectCode exists and is active
+            try:
+                project_code_obj = ProjectCode.objects.get(id=project_code, is_active=True)
+            except ProjectCode.DoesNotExist:
+                return Response(
+                    {"message": "Invalid project code ID or project code is not active",
+                     "data": None,
+                     "status": status.HTTP_400_BAD_REQUEST},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             with transaction.atomic():
                 document = UploadedDocument.objects.create(
                     title=title,
                     category=category_obj,
-                    project_code=project_code,
+                    project_code=project_code_obj,
                     file=file,
                     uploaded_by=user,
                     current_status=document_status

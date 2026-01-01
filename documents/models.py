@@ -91,7 +91,9 @@ class UploadedDocument(models.Model):
         "Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
     )
 
-    project_code = models.CharField(max_length=100)
+    project_code = models.ForeignKey(
+        "ProjectCode", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents"
+    )
 
     current_status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="PENDING"

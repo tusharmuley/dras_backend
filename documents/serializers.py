@@ -48,6 +48,11 @@ class CategoryNestedSerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'category']
 
+class ProjectCodeNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectCode
+        fields = ['id', 'project_code']
+
 # -------------------------------
 # GET serializer for UploadedDocument
 # -------------------------------
@@ -55,6 +60,7 @@ class UploadedDocumentReadSerializer(serializers.ModelSerializer):
     uploaded_by = UserNestedSerializer(read_only=True)
     approved_by = UserNestedSerializer(read_only=True)
     category = CategoryNestedSerializer(read_only=True)
+    project_code = serializers.SerializerMethodField()
     is_signed = serializers.SerializerMethodField()
 
     class Meta:
@@ -73,6 +79,12 @@ class UploadedDocumentReadSerializer(serializers.ModelSerializer):
             "approved_at",
             "is_signed",
         ]
+    
+    def get_project_code(self, obj):
+        """Return project code object if it exists"""
+        if not obj.project_code:
+            return None
+        return ProjectCodeNestedSerializer(obj.project_code).data
     
     def get_is_signed(self, obj):
         """Check if document has a signed version uploaded"""
