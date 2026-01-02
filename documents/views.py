@@ -182,8 +182,7 @@ class DocumentView(APIView):
             if search:
                 queryset = queryset.filter(
                     Q(title__icontains=search) |
-                    Q(uid__icontains=search) |
-                    Q(project_code__icontains=search)
+                    Q(uid__icontains=search) 
                 )
 
             if status_filter:
