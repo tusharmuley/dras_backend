@@ -2,51 +2,6 @@
 
 import django.db.models.deletion
 from django.db import migrations, models
-import uuid
-
-
-def clean_invalid_project_codes(apps, schema_editor):
-    """
-    Clean up invalid project_code values before converting to ForeignKey.
-    Sets invalid UUID strings to NULL using raw SQL.
-    """
-    db_alias = schema_editor.connection.alias
-    UploadedDocument = apps.get_model('documents', 'UploadedDocument')
-    ProjectCode = apps.get_model('documents', 'ProjectCode')
-    
-    # Get all documents with project_code using raw SQL to avoid field type issues
-    with schema_editor.connection.cursor() as cursor:
-        cursor.execute("SELECT id, project_code FROM dcs_documents WHERE project_code IS NOT NULL AND project_code != ''")
-        rows = cursor.fetchall()
-        
-        for doc_id, project_code_value in rows:
-            try:
-                # Try to validate as UUID
-                uuid.UUID(str(project_code_value))
-                # If valid UUID, check if ProjectCode exists and is active
-                try:
-                    ProjectCode.objects.using(db_alias).get(id=project_code_value, is_active=True)
-                    # Valid UUID and ProjectCode exists, keep it
-                    continue
-                except ProjectCode.DoesNotExist:
-                    # Valid UUID but ProjectCode doesn't exist, set to NULL
-                    cursor.execute(
-                        "UPDATE dcs_documents SET project_code = NULL WHERE id = %s",
-                        [str(doc_id)]
-                    )
-            except (ValueError, TypeError, AttributeError):
-                # Invalid UUID format, set to NULL
-                cursor.execute(
-                    "UPDATE dcs_documents SET project_code = NULL WHERE id = %s",
-                    [str(doc_id)]
-                )
-
-
-def reverse_clean_invalid_project_codes(apps, schema_editor):
-    """
-    Reverse migration - nothing to do as we're just cleaning data
-    """
-    pass
 
 
 class Migration(migrations.Migration):
@@ -56,15 +11,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Step 1: Make the CharField nullable first (so we can set invalid values to NULL)
-        migrations.AlterField(
-            model_name='uploadeddocument',
-            name='project_code',
-            field=models.CharField(blank=True, max_length=100, null=True),
-        ),
-        # Step 2: Clean up invalid project_code values (now that it's nullable)
-        migrations.RunPython(clean_invalid_project_codes, reverse_clean_invalid_project_codes),
-        # Step 3: Convert the field to ForeignKey
         migrations.AlterField(
             model_name='uploadeddocument',
             name='project_code',

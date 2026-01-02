@@ -836,7 +836,7 @@ class DocumentShareView(APIView):
 # ===========================
 class DocumentUploadSignedView(APIView):
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated, IsEmployee]
+    # permission_classes = [IsAuthenticated, IsEmployee, IsApprover]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, document_id):
@@ -846,6 +846,9 @@ class DocumentUploadSignedView(APIView):
                 id=document_id,
                 uploaded_by=request.user
             )
+            
+            if request.user.role != "employee" and request.user.role != "admin" and request.user.role != "super_admin":
+                return Response({"message": "You do not have permission to upload signed document", "data": None, "status": status.HTTP_403_FORBIDDEN}, status=status.HTTP_403_FORBIDDEN)
 
             if document.current_status != "APPROVED":
                 return Response(
