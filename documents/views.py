@@ -344,7 +344,7 @@ class DocumentView(APIView):
                 if action == "approve":
                     try:
                         with transaction.atomic():
-                            year_month = timezone.now().strftime('%Y%m')
+                            year_month = timezone.now().strftime('%y%m')
                             uid = f"{year_month}{uuid4().hex[:8].upper()}"
                             document.uid = uid
                             document.current_status = "APPROVED"
@@ -354,10 +354,37 @@ class DocumentView(APIView):
                             document.save()
                             
                             # Ensure document is PDF (convert DOCX if needed)
-                            final_pdf_path = ensure_pdf_file(document)
+                            try:
+                                final_pdf_path = ensure_pdf_file(document)
+                            except Exception as conversion_error:
+                                # Rollback the transaction if conversion fails
+                                raise Exception(
+                                    f"Document approval failed: {str(conversion_error)}\n\n"
+                                    f"Please ensure the document is uploaded as a PDF file, or install conversion tools "
+                                    f"(LibreOffice or docx2pdf) to convert DOCX files automatically."
+                                )
+                            
+                            # Refresh document instance to ensure we have the latest file path
+                            document.refresh_from_db()
+                            
+                            # Verify the PDF file exists before stamping
+                            if not os.path.exists(final_pdf_path):
+                                # Try to get the path again after refresh
+                                final_pdf_path = document.file.path
+                                if not os.path.exists(final_pdf_path):
+                                    raise Exception(
+                                        f"PDF file not found at: {final_pdf_path}\n\n"
+                                        f"The conversion completed but the file is not accessible. Please try again."
+                                    )
                             
                             # Stamp the PDF with UID
-                            stamp_pdf_with_uid(final_pdf_path, uid)
+                            try:
+                                stamp_pdf_with_uid(final_pdf_path, uid)
+                            except Exception as stamp_error:
+                                raise Exception(
+                                    f"Failed to stamp PDF with UID: {str(stamp_error)}\n\n"
+                                    f"Please ensure the PDF file is accessible and not locked by another process."
+                                )
 
                             DocumentAudit.objects.create(
                                 document=document,
@@ -552,7 +579,7 @@ class DocumentView(APIView):
                 else:
                     return Response({"message": "Invalid action specified", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
             
-            elif user.role == "employee" and action in ["pending","update_content"]:
+            elif user.role == "employee" and action in ["pending","update_content","change_category"]:
                 if action == "pending":
                     try:
                         document.current_status = "PENDING"
@@ -580,6 +607,74 @@ class DocumentView(APIView):
                         line_number = sys.exc_info()[2].tb_lineno
                         print(f"Error in update content process: {str(e)}, line: {line_number}")
                         return Response({"message": "Failed to update document content", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                elif action == "change_category":
+                    try:
+                        # Check if employee owns the document
+                        if user.id != document.uploaded_by.id:
+                            return Response(
+                                {"message": "You do not have permission to update this document",
+                                "data": None,
+                                "status": status.HTTP_403_FORBIDDEN},
+                                status=status.HTTP_403_FORBIDDEN
+                            )
+                        
+                        # Check if document is in DRAFT status
+                        if document.current_status != "DRAFT":
+                            return Response(
+                                {"message": "Category can only be changed when document is in DRAFT status",
+                                "data": None,
+                                "status": status.HTTP_400_BAD_REQUEST},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        
+                        category_id = request.data.get("category")
+                        
+                        if not category_id:
+                            return Response(
+                                {"message": "Category ID is required",
+                                "data": None,
+                                "status": status.HTTP_400_BAD_REQUEST},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
+                        # Validate category exists and is active
+                        try:
+                            new_category_obj = Category.objects.get(id=category_id, is_active=True)
+                        except Category.DoesNotExist:
+                            return Response(
+                                {"message": "Invalid category ID or category is not active",
+                                "data": None,
+                                "status": status.HTTP_400_BAD_REQUEST},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+
+                        # Store old category before updating
+                        old_category_obj = document.category
+                        
+                        document.category = new_category_obj
+                        document.save()
+
+                        DocumentAudit.objects.create(
+                            document=document,
+                            action="CATEGORY_CHANGED",
+                            action_by=user,
+                            old_category=old_category_obj,
+                            new_category=new_category_obj,
+                            remarks=request.data.get("remarks")
+                        )
+
+                        return Response(
+                            {"message": "Document category updated successfully",
+                            "data": {"category_id": str(new_category_obj.id), "category": new_category_obj.category},
+                            "status": status.HTTP_200_OK},
+                            status=status.HTTP_200_OK
+                        )
+                    except Exception as e:
+                        line_number = sys.exc_info()[2].tb_lineno
+                        print(f"Error in change category process: {str(e)}, line: {line_number}")
+                        return Response({"message": "Failed to change document category", "data": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
                 else:
                     return Response({"message": "Invalid action specified", "data": None, "status": status.HTTP_400_BAD_REQUEST}, status=status.HTTP_400_BAD_REQUEST)
 

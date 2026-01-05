@@ -316,12 +316,35 @@ def ensure_pdf_file(document):
         
         # Save document to persist file field changes
         document.save()
+        
+        # Refresh the document instance to get the updated file path
+        document.refresh_from_db()
     
-    # Return the final PDF path
-    return document.file.path
+    # Return the final PDF path - ensure it exists
+    final_path = document.file.path
+    if not os.path.exists(final_path):
+        raise Exception(
+            f"PDF file not found after conversion at: {final_path}\n\n"
+            f"The conversion completed but the file is not accessible. Please try again."
+        )
+    return final_path
 
 def stamp_pdf_with_uid(input_pdf_path, uid):
+    """
+    Stamp PDF file with UID at top right corner.
+    
+    Args:
+        input_pdf_path: Path to the PDF file to stamp
+        uid: UID string to stamp on the PDF
+        
+    Raises:
+        Exception: If file doesn't exist or stamping fails
+    """
     try:
+        # Verify file exists before attempting to stamp
+        if not os.path.exists(input_pdf_path):
+            raise Exception(f"PDF file not found at: {input_pdf_path}")
+        
         reader = PdfReader(input_pdf_path)
         writer = PdfWriter()
 
@@ -330,12 +353,14 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             can = canvas.Canvas(packet, pagesize=A4)
 
             can.setFont("Helvetica", 8)
-            # Right bottom corner - only UID text (no approved date)
-            # A4 width is 595.27 points, using ~430 for right alignment
+            # Position UID below header/top line, top right area
+            # A4 width is 595.27 points, height is 841.89 points
+            # Header typically takes ~100-150 points from top
+            # Positioning UID below header but still in top area: ~720 from bottom (120 points from top)
             uid_text = f"UID: {uid}"
 
-            X_POSITION = 430   # control left/right here
-            Y_UID = 32
+            X_POSITION = 430   # control left/right here (right-aligned)
+            Y_UID = 740        # Below header/top line (841.89 - 120 = ~720, positioned after header section)
 
             # Draw only the UID on the page
             can.drawString(X_POSITION, Y_UID, uid_text)
@@ -347,9 +372,16 @@ def stamp_pdf_with_uid(input_pdf_path, uid):
             page.merge_page(overlay_pdf.pages[0])
             writer.add_page(page)
 
+        # Write the stamped PDF back to the file
         with open(input_pdf_path, "wb") as f:
             writer.write(f)
+        
+        # Verify the file was written successfully
+        if not os.path.exists(input_pdf_path):
+            raise Exception(f"Failed to write stamped PDF to: {input_pdf_path}")
+        
         print("PDF stamped with UID successfully")
     except Exception as e:
-        print("Failed to stamp PDF with UID", e)
-        raise Exception(e)
+        error_msg = f"Failed to stamp PDF with UID: {str(e)}"
+        print(error_msg)
+        raise Exception(error_msg)
