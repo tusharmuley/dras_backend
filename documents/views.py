@@ -1051,7 +1051,7 @@ class ProjectCodeView(APIView):
     def get(self, request):
         try:
             project_codes = ProjectCode.objects.filter(is_active=True)
-            # Pagination
+            # Pagination 
             paginator = CustomPagination()
             page = paginator.paginate_queryset(project_codes, request)
             serializer = ProjectCodeSerializer(page, many=True)
