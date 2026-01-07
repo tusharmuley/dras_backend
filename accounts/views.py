@@ -519,6 +519,14 @@ class ChangePasswordView(APIView):
 class UserProfileDetailView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            user = request.user
+            serializer = AuthDataSerializer(user)
+            return Response({"data": serializer.data, "message": "User profile fetched successfully", "status": status.HTTP_200_OK}, status=status.HTTP_200_OK)
+        except Exception as e:
+            line_number = sys.exc_info()[2].tb_lineno
+            return Response({"message": "Something went wrong", "error": str(e), "line_number": line_number, "status": status.HTTP_500_INTERNAL_SERVER_ERROR}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request):
         try:
