@@ -378,7 +378,10 @@ class CreateEmployeeView(APIView):
                 return Response({"message": "User ID is required", "status":status.HTTP_400_BAD_REQUEST}, status.HTTP_400_BAD_REQUEST)
             
             try:
-                user = User.objects.get(id=user_id, created_by=request.user.id)
+                if request.user.role == "super_admin":
+                    user = User.objects.get(id=user_id, is_active=True)
+                else:
+                    user = User.objects.get(id=user_id, is_active=True, created_by=request.user.id)
             except User.DoesNotExist:
                 return Response({"message": "User not found", "status":status.HTTP_404_NOT_FOUND}, status.HTTP_404_NOT_FOUND)
             
