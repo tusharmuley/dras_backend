@@ -91,7 +91,7 @@ class CreateAdminView(APIView):
         try:
             if request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
-            queryset = User.objects.filter(Q(role="admin") | Q(role="employee"), is_active=True).order_by("-created_datetime")
+            queryset = User.objects.filter(role="admin", is_active=True).order_by("-created_datetime")
             # Pagination
             paginator = CustomPagination()
             page = paginator.paginate_queryset(queryset, request)
@@ -135,7 +135,8 @@ class CreateAdminView(APIView):
                         last_name=last_name,
                         email=email,
                         role="admin",
-                        created_by=request.user
+                        created_by=request.user,
+                        employee_id=employee_id
                     )
                     return Response({"message": "Admin created successfully", "status":status.HTTP_201_CREATED}, status.HTTP_201_CREATED)
             except Exception as e:
@@ -314,7 +315,7 @@ class CreateEmployeeView(APIView):
 
     def put(self, request):
         try:
-            if request.user.role != "admin" and request.user.role != "employee":
+            if request.user.role != "admin" and request.user.role != "super_admin":
                 return Response({"message": "Permission denied", "status":status.HTTP_403_FORBIDDEN}, status.HTTP_403_FORBIDDEN)
             
             data = request.data
